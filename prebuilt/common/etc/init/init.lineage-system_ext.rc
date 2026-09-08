@@ -10,3 +10,5 @@ service lineage-bugreport /system/bin/dumpstate -d -p -z
     disabled
     oneshot
     keycodes 114 115 116
+
+

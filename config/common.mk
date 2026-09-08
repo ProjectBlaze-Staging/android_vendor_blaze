@@ -8,7 +8,7 @@ PRODUCT_SOURCE_ROOT_DIRS += -prebuilts/misc/protobuf_vendorcompat
 # Allow vendor prebuilt repos to exclude themselves from bp scanning
 -include $(sort $(wildcard vendor/*/*/exclude-bp.mk))
 
-PRODUCT_BRAND ?= LineageOS
+PRODUCT_BRAND ?= BlazeAOSP
 
 ifeq ($(PRODUCT_GMS_CLIENTID_BASE),)
 PRODUCT_PRODUCT_PROPERTIES += \
@@ -107,6 +107,19 @@ PRODUCT_COPY_FILES += \
 PRODUCT_PRODUCT_PROPERTIES += \
     ro.control_privapp_permissions=enforce
 
+# Memory management & LMKD tuning (BlazeAOSP Performance & Stability)
+PRODUCT_PRODUCT_PROPERTIES += \
+    persist.sys.zram_enabled=1 \
+    ro.lmk.kill_heaviest_task=true \
+    ro.lmk.kill_timeout_ms=100 \
+    ro.lmk.use_psi=true \
+    ro.lmk.swap_free_low_percentage=20 \
+    ro.lmk.thrashing_limit=30 \
+    ro.lmk.thrashing_limit_decay=10 \
+    ro.lmk.psi_partial_stall_ms=70 \
+    ro.lmk.psi_complete_stall_ms=700 \
+    ro.lmk.swap_util_max=90
+
 ifneq ($(TARGET_DISABLE_LINEAGE_SDK), true)
 # Lineage SDK
 include vendor/lineage/config/lineage_sdk_common.mk
@@ -130,7 +143,7 @@ PRODUCT_RESTRICT_VENDOR_FILES := false
 
 ifneq ($(TARGET_DISABLE_EPPE),true)
 # Require all requested packages to exist
-$(call enforce-product-packages-exist-internal,$(lastword $(_include_stack)),product_manifest.xml rild Calendar android.hidl.memory@1.0-impl.vendor vndk_apex_snapshot_package)
+$(call enforce-product-packages-exist-internal,$(lastword $(_include_stack)),product_manifest.xml rild Calendar android.hidl.memory@1.0-impl.vendor vndk_apex_snapshot_package com.android.ranging vendor_tracing_descriptors)
 endif
 
 # Bootanimation

@@ -34,12 +34,19 @@ LINEAGE_VERSION_SUFFIX := $(LINEAGE_BUILD_DATE)-$(LINEAGE_BUILDTYPE)$(LINEAGE_EX
 # Internal version
 LINEAGE_VERSION := $(PRODUCT_VERSION_MAJOR).$(PRODUCT_VERSION_MINOR)-$(LINEAGE_VERSION_SUFFIX)
 
-# Display version
-LINEAGE_DISPLAY_VERSION := $(PRODUCT_VERSION_MAJOR)-$(LINEAGE_VERSION_SUFFIX)
+# BlazeAOSP version
+BLAZE_VERSION := 5-Comeback
+BLAZE_DISPLAY_VERSION := 5-Comeback
 
-# LineageOS version properties
+# Display version
+LINEAGE_DISPLAY_VERSION := $(BLAZE_DISPLAY_VERSION)
+
+# BlazeAOSP and LineageOS version properties
 PRODUCT_PRODUCT_PROPERTIES += \
+    ro.blaze.version=$(BLAZE_VERSION) \
+    ro.blaze.display.version=$(BLAZE_DISPLAY_VERSION) \
+    ro.blaze.releasetype=$(LINEAGE_BUILDTYPE) \
     ro.lineage.version=$(LINEAGE_VERSION) \
-    ro.lineage.display.version=$(LINEAGE_DISPLAY_VERSION) \
+    ro.lineage.display.version=$(BLAZE_DISPLAY_VERSION) \
     ro.lineage.build.version=$(PRODUCT_VERSION_MAJOR).$(PRODUCT_VERSION_MINOR) \
     ro.lineage.releasetype=$(LINEAGE_BUILDTYPE)
