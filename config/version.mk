@@ -10,16 +10,20 @@ endif
 # Set LINEAGE_BUILDTYPE from the env RELEASE_TYPE, for jenkins compat
 
 ifndef LINEAGE_BUILDTYPE
-    ifdef RELEASE_TYPE
+    ifdef BLAZE_BUILD_TYPE
+        LINEAGE_BUILDTYPE := $(BLAZE_BUILD_TYPE)
+    else ifdef RELEASE_TYPE
         # Starting with "LINEAGE_" is optional
         RELEASE_TYPE := $(shell echo $(RELEASE_TYPE) | sed -e 's|^LINEAGE_||g')
         LINEAGE_BUILDTYPE := $(RELEASE_TYPE)
+    else
+        LINEAGE_BUILDTYPE := OFFICIAL
     endif
 endif
 
-# Filter out random types, so it'll reset to UNOFFICIAL
-ifeq ($(filter RELEASE NIGHTLY SNAPSHOT EXPERIMENTAL,$(LINEAGE_BUILDTYPE)),)
-    LINEAGE_BUILDTYPE := UNOFFICIAL
+# Filter out random types, so it'll reset to OFFICIAL
+ifeq ($(filter OFFICIAL RELEASE NIGHTLY SNAPSHOT EXPERIMENTAL UNOFFICIAL,$(LINEAGE_BUILDTYPE)),)
+    LINEAGE_BUILDTYPE := OFFICIAL
     LINEAGE_EXTRAVERSION :=
 endif
 
