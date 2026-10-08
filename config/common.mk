@@ -37,7 +37,7 @@ ifdef WITH_ADB_INSECURE
 PRODUCT_SYSTEM_EXT_PROPERTIES += ro.adb.secure=0
 else
 # Enable ADB authentication
-PRODUCT_SYSTEM_EXT_PROPERTIES += ro.adb.secure=1
+ PRODUCT_SYSTEM_EXT_PROPERTIES += ro.adb.secure=1
 
 # Set ro.debuggable=0 for userdebug
 PRODUCT_NOT_DEBUGGABLE_IN_USERDEBUG := true
@@ -317,6 +317,9 @@ PRODUCT_PACKAGE_OVERLAYS += vendor/crowdin/overlay
 
 PRODUCT_EXTRA_RECOVERY_KEYS += \
     vendor/lineage/build/target/product/security/lineage
+
+PRODUCT_DUMPVARS_SETTINGS += \
+	BLAZE_VERSION
 
 include vendor/lineage/config/version.mk
 

@@ -16,8 +16,12 @@
 # -----------------------------------------------------------------
 # BlazeAOSP OTA update package
 
+
 BLAZE_TARGET_PACKAGE := $(PRODUCT_OUT)/BlazeAOSP-v$(BLAZE_VERSION)-$(LINEAGE_BUILD_DATE)-$(LINEAGE_BUILDTYPE)-$(TARGET_DEVICE).zip
 LINEAGE_TARGET_PACKAGE := $(PRODUCT_OUT)/lineage-$(LINEAGE_VERSION).zip
+BLAZE_BUILD_TYPE := $(TARGET_BUILD_VARIANT)
+BLAZE_TARGET_PACKAGE := $(PRODUCT_OUT)/BlazeAOSP-$(BLAZE_VERSION)-$(BLAZE_BUILD_TYPE).zip
+
 
 SHA256 := prebuilts/build-tools/path/$(HOST_PREBUILT_TAG)/sha256sum
 
@@ -30,3 +34,16 @@ $(BLAZE_TARGET_PACKAGE): $(INTERNAL_OTA_PACKAGE_TARGET)
 
 .PHONY: bacon
 bacon: $(BLAZE_TARGET_PACKAGE) $(DEFAULT_GOAL)
+	$(hide) $(SHA256) $(BLAZE_TARGET_PACKAGE) | sed "s|$(PRODUCT_OUT)/||" > $(BLAZE_TARGET_PACKAGE).sha256sum
+	@echo '------------------------------------------------------' >&2
+	@echo ' Blaze Yall! BlazeAOSP Build Complete!' >&2
+	@echo ' Build Variant : $(BLAZE_BUILD_TYPE)' >&2
+	@echo ' Output Zip    : $(BLAZE_TARGET_PACKAGE)' >&2
+	@echo ' SHA256 File   : $(BLAZE_TARGET_PACKAGE).sha256sum' >&2
+	@echo '------------------------------------------------------' >&2
+
+.PHONY: bacon
+bacon: $(BLAZE_TARGET_PACKAGE) $(DEFAULT_GOAL)
+
+
+
