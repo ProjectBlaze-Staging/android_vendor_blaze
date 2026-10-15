@@ -1,6 +1,25 @@
 # Allow vendor/extra to override any property by setting it first
 $(call inherit-product-if-exists, vendor/extra/product.mk)
 
+# BlazeAOSP release flavor. Vanilla is the reproducible default; LiteGApps
+# deliberately requires the minimal partner package to be present locally.
+BLAZE_BUILD_VARIANT ?= vanilla
+ifneq ($(filter $(BLAZE_BUILD_VARIANT),vanilla litegapps),$(BLAZE_BUILD_VARIANT))
+$(error Unsupported BLAZE_BUILD_VARIANT "$(BLAZE_BUILD_VARIANT)"; use vanilla or litegapps)
+endif
+
+ifeq ($(BLAZE_BUILD_VARIANT),litegapps)
+WITH_GMS := true
+GMS_MAKEFILE ?= gms_minimal.mk
+ifeq ($(wildcard vendor/partner_gms/products/$(GMS_MAKEFILE)),)
+$(error LiteGApps requires vendor/partner_gms/products/$(GMS_MAKEFILE))
+endif
+$(call inherit-product, vendor/partner_gms/products/$(GMS_MAKEFILE))
+endif
+
+PRODUCT_PRODUCT_PROPERTIES += \
+    ro.blaze.build.variant=$(BLAZE_BUILD_VARIANT)
+
 # Exclude repos from bp scanning
 PRODUCT_SOURCE_ROOT_DIRS += -kernel/platform
 PRODUCT_SOURCE_ROOT_DIRS += -prebuilts/misc/protobuf_vendorcompat
@@ -162,6 +181,12 @@ ifeq ($(PRODUCT_IS_ATV),)
 PRODUCT_PACKAGES += \
     ExactCalculator \
     Jelly
+
+# BlazeAOSP ships the unmodified Mozilla Firefox release instead of the AOSP
+# and Lineage browser apps.
+PRODUCT_PACKAGES -= Browser2 Jelly
+PRODUCT_PACKAGES += \
+    Firefox
 endif
 
 ifeq ($(PRODUCT_IS_AUTOMOTIVE),)
