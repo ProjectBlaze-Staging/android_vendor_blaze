@@ -27,7 +27,10 @@ WITH_ADB_INSECURE := true
 PRODUCT_ADB_KEYS := vendor/lineage/keys/adb_keys
 PRODUCT_COPY_FILES += \
     vendor/lineage/keys/adb_keys:$(TARGET_COPY_OUT_ROOT)/adb_keys \
-    vendor/lineage/keys/adb_keys:$(TARGET_COPY_OUT_SYSTEM)/etc/security/adbd_debug.pub
+    vendor/lineage/keys/adb_keys:$(TARGET_COPY_OUT_SYSTEM)/etc/security/adbd_debug.pub \
+    vendor/lineage/prebuilt/common/media/wallpapers/Wallpapera.jpg:$(TARGET_COPY_OUT_SYSTEM)/media/wallpapers/Wallpapera.jpg \
+    vendor/lineage/prebuilt/common/media/wallpapers/Wallpaperb.jpg:$(TARGET_COPY_OUT_SYSTEM)/media/wallpapers/Wallpaperb.jpg \
+    vendor/lineage/prebuilt/common/media/wallpapers/Wallpaperl.jpg:$(TARGET_COPY_OUT_SYSTEM)/media/wallpapers/Wallpaperl.jpg
 
 PRODUCT_NAME := lineage_gsi_arm64
 PRODUCT_DEVICE := generic_arm64
