@@ -1,0 +1,18 @@
+// Copyright (C) 2026 BlazeAOSP Project
+// SPDX-License-Identifier: Apache-2.0
+
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+android_app_import {
+    name: "AuroraStore",
+    owner: "aurora",
+    apk: "AuroraStore.apk",
+    preprocessed: true,
+    presigned: true,
+    dex_preopt: {
+        enabled: false,
+    },
+    product_specific: true,
+}
