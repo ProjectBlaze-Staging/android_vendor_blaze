@@ -1,1 +1,2 @@
 prebuilt/common/app/Firefox/Firefox.apk filter=lfs diff=lfs merge=lfs -text
+prebuilt/common/app/MicroG/GmsCore.apk filter=lfs diff=lfs merge=lfs -text

@@ -35,6 +35,18 @@ PRODUCT_COPY_FILES += \
 PRODUCT_NAME := lineage_gsi_arm64
 PRODUCT_DEVICE := generic_arm64
 
-PRODUCT_PACKAGES += AuroraStore
+# Modern Google Pixel UI Sound Pack
+PIXEL_SOUND_FILES := camera_click camera_focus VideoRecord VideoStop Lock Unlock Effect_Tick LowBattery ChargingStarted WirelessChargingStarted Dock Undock KeypressStandard KeypressDelete KeypressSpacebar KeypressReturn InCallNotification NFCInitiated NFCSuccess NFCFailure NFCTransferInitiated NFCTransferComplete
+
+PRODUCT_COPY_FILES += $(foreach fn,$(PIXEL_SOUND_FILES),\
+    vendor/lineage/prebuilt/common/media/audio/ui/$(fn).ogg:$(TARGET_COPY_OUT_SYSTEM)/media/audio/ui/$(fn).ogg \
+    vendor/lineage/prebuilt/common/media/audio/ui/$(fn).ogg:$(TARGET_COPY_OUT_PRODUCT)/media/audio/ui/$(fn).ogg)
+
+PRODUCT_PACKAGES += \
+    AuroraStore \
+    Firefox \
+    FossifyGallery \
+    GmsCore \
+    GsfProxy
 
 PRODUCT_ENFORCE_ARTIFACT_PATH_REQUIREMENTS :=

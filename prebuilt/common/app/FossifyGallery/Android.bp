@@ -1,0 +1,14 @@
+// Copyright (C) 2026 BlazeAOSP Project
+// SPDX-License-Identifier: Apache-2.0
+
+android_app_import {
+    name: "FossifyGallery",
+    owner: "fossify",
+    apk: "FossifyGallery.apk",
+    preprocessed: true,
+    presigned: true,
+    dex_preopt: {
+        enabled: false,
+    },
+    product_specific: true,
+}
