@@ -22,6 +22,13 @@ PRODUCT_USE_DYNAMIC_PARTITION_SIZE := true
 
 TARGET_NO_KERNEL_OVERRIDE := true
 
+# Allow unauthenticated / pre-authorized ADB for GSI debugging and testing
+WITH_ADB_INSECURE := true
+PRODUCT_ADB_KEYS := vendor/lineage/keys/adb_keys
+PRODUCT_COPY_FILES += \
+    vendor/lineage/keys/adb_keys:$(TARGET_COPY_OUT_ROOT)/adb_keys \
+    vendor/lineage/keys/adb_keys:$(TARGET_COPY_OUT_SYSTEM)/etc/security/adbd_debug.pub
+
 PRODUCT_NAME := lineage_gsi_arm64
 PRODUCT_DEVICE := generic_arm64
 
