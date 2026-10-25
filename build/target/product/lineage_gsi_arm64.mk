@@ -45,8 +45,6 @@ PRODUCT_COPY_FILES += $(foreach fn,$(PIXEL_SOUND_FILES),\
 PRODUCT_PACKAGES += \
     AuroraStore \
     Firefox \
-    FossifyGallery \
-    GmsCore \
-    GsfProxy
+    FossifyGallery
 
 PRODUCT_ENFORCE_ARTIFACT_PATH_REQUIREMENTS :=
