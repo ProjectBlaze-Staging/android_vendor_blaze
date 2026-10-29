@@ -16,3 +16,25 @@ prebuilt_addon_d {
     name: "50-lineage.sh",
     src: "bin/50-lineage.sh",
 }
+
+prebuilt_media {
+    name: "Wallpapera.jpg",
+    src: "media/wallpapers/Wallpapera.jpg",
+    relative_install_path: "wallpapers",
+    product_specific: true,
+}
+
+prebuilt_media {
+    name: "Wallpaperb.jpg",
+    src: "media/wallpapers/Wallpaperb.jpg",
+    relative_install_path: "wallpapers",
+    product_specific: true,
+}
+
+prebuilt_media {
+    name: "Wallpaperl.jpg",
+    src: "media/wallpapers/Wallpaperl.jpg",
+    relative_install_path: "wallpapers",
+    product_specific: true,
+}
+

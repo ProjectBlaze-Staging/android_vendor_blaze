@@ -42,9 +42,15 @@ PRODUCT_COPY_FILES += $(foreach fn,$(PIXEL_SOUND_FILES),\
     vendor/lineage/prebuilt/common/media/audio/ui/$(fn).ogg:$(TARGET_COPY_OUT_SYSTEM)/media/audio/ui/$(fn).ogg \
     vendor/lineage/prebuilt/common/media/audio/ui/$(fn).ogg:$(TARGET_COPY_OUT_PRODUCT)/media/audio/ui/$(fn).ogg)
 
+
+
 PRODUCT_PACKAGES += \
-    AuroraStore \
     Firefox \
-    FossifyGallery
+    FossifyGallery \
+    SettingsIntelligence
+
+# Google Mobile Services (MindTheGapps Baklava)
+WITH_GMS := true
+$(call inherit-product-if-exists, vendor/gapps/arm64/arm64-vendor.mk)
 
 PRODUCT_ENFORCE_ARTIFACT_PATH_REQUIREMENTS :=

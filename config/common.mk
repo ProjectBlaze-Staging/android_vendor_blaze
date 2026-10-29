@@ -137,7 +137,10 @@ PRODUCT_PRODUCT_PROPERTIES += \
     ro.lmk.thrashing_limit_decay=10 \
     ro.lmk.psi_partial_stall_ms=70 \
     ro.lmk.psi_complete_stall_ms=700 \
-    ro.lmk.swap_util_max=90
+    ro.lmk.swap_util_max=90 \
+    ro.surface_flinger.supports_background_blur=1 \
+    persist.sys.sf.disable_blurs=0 \
+    ro.sf.blurs_are_expensive=0
 
 ifneq ($(TARGET_DISABLE_LINEAGE_SDK), true)
 # Lineage SDK
@@ -315,7 +318,9 @@ $(call inherit-product, vendor/lineage/audio/audio.mk)
 # SetupWizard
 PRODUCT_PRODUCT_PROPERTIES += \
     setupwizard.theme=glif_v4 \
-    setupwizard.feature.day_night_mode_enabled=true
+    setupwizard.feature.day_night_mode_enabled=true \
+    persist.vendor.camera.privapp.list=com.google.android.GoogleCamera,org.lineageos.aperture \
+    vendor.camera.aux.packagelist=com.google.android.GoogleCamera,org.lineageos.aperture
 
 PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += vendor/lineage/overlay/no-rro
 PRODUCT_PACKAGE_OVERLAYS += \

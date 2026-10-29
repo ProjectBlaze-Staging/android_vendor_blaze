@@ -38,6 +38,10 @@ ifeq ($(WITH_GMS),true)
             endif
         endif
 
+        ifneq (,$(wildcard vendor/gapps))
+            $(call inherit-product-if-exists, vendor/gapps/$(TARGET_ARCH)/$(TARGET_ARCH)-vendor.mk)
+        endif
+
         ifneq (,$(wildcard vendor/partner_modules))
             # Specify the mainline module makefile you want to use, for example:
             #   - mainline_modules.mk              - updatable apex

@@ -1,14 +1,15 @@
 // Copyright (C) 2026 BlazeAOSP Project
 // SPDX-License-Identifier: Apache-2.0
 
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
 android_app_import {
     name: "Firefox",
     owner: "mozilla",
     apk: "Firefox.apk",
     preprocessed: true,
-    // Mozilla ships compressed JNI libraries. Keep the upstream APK byte-for-byte
-    // intact so its v2/v3 signature remains valid instead of repacking it here.
-    skip_preprocessed_apk_checks: true,
     presigned: true,
     dex_preopt: {
         enabled: false,
