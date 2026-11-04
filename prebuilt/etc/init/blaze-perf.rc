@@ -1,0 +1,27 @@
+# Copyright (C) 2026 The BlazeAOSP Project
+# SPDX-License-Identifier: Apache-2.0
+#
+# BlazeAOSP System Performance, Frame Pacing & Feature Initialization
+
+on init
+    setprop debug.sf.early_phase_offset_ns ""
+    setprop debug.sf.early_app_phase_offset_ns ""
+
+on property:sys.boot_completed=1
+    # Boost top-app CPU uclamp for responsive gesture animations and rapid app launches
+    write /dev/cpuctl/top-app/cpu.uclamp.min 15
+    write /dev/cpuctl/top-app/cpu.uclamp.latency_sensitive 1
+    write /dev/cpuctl/foreground/cpu.uclamp.min 5
+
+    # Tune scheduler wakeup granularity for smoother 90Hz/120Hz frame pacing
+    write /proc/sys/kernel/sched_min_granularity_ns 1000000
+    write /proc/sys/kernel/sched_wakeup_granularity_ns 1500000
+    write /proc/sys/kernel/sched_migration_cost_ns 250000
+
+    # Optimize VM dirty writeback to prevent I/O stalls during rapid app transitions
+    write /proc/sys/vm/dirty_background_ratio 5
+    write /proc/sys/vm/dirty_ratio 15
+    write /proc/sys/vm/swappiness 100
+
+    # Enable USAP pool for faster Zygote app cold starts
+    setprop persist.device_config.runtime_native.usap_pool_enabled true

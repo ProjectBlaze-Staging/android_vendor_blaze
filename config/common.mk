@@ -1,359 +1,83 @@
-# Allow vendor/extra to override any property by setting it first
-$(call inherit-product-if-exists, vendor/extra/product.mk)
+#
+# Copyright (C) 2026 BlazeAOSP Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
-# BlazeAOSP release flavor. Vanilla is the reproducible default; LiteGApps
-# deliberately requires the minimal partner package to be present locally.
-BLAZE_BUILD_VARIANT ?= vanilla
-ifneq ($(filter $(BLAZE_BUILD_VARIANT),vanilla litegapps),$(BLAZE_BUILD_VARIANT))
-$(error Unsupported BLAZE_BUILD_VARIANT "$(BLAZE_BUILD_VARIANT)"; use vanilla or litegapps)
-endif
+# Inherit LineageOS common definitions
+$(call inherit-product, vendor/lineage/config/common.mk)
 
-ifeq ($(BLAZE_BUILD_VARIANT),litegapps)
-WITH_GMS := true
-GMS_MAKEFILE ?= gms_minimal.mk
-ifeq ($(wildcard vendor/partner_gms/products/$(GMS_MAKEFILE)),)
-$(error LiteGApps requires vendor/partner_gms/products/$(GMS_MAKEFILE))
-endif
-$(call inherit-product, vendor/partner_gms/products/$(GMS_MAKEFILE))
-endif
+# BlazeAOSP Brand & Model
+PRODUCT_BRAND := BlazeAOSP
 
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.blaze.build.variant=$(BLAZE_BUILD_VARIANT)
+# Inherit Blaze versioning
+include vendor/blaze/config/version.mk
 
-# Exclude repos from bp scanning
-PRODUCT_SOURCE_ROOT_DIRS += -kernel/platform
-PRODUCT_SOURCE_ROOT_DIRS += -prebuilts/misc/protobuf_vendorcompat
+# Custom Blaze Overlays
+PRODUCT_PACKAGE_OVERLAYS += \
+    vendor/blaze/overlay/common
 
-# Allow vendor prebuilt repos to exclude themselves from bp scanning
--include $(sort $(wildcard vendor/*/*/exclude-bp.mk))
-
-PRODUCT_BRAND ?= BlazeAOSP
-
-ifeq ($(PRODUCT_GMS_CLIENTID_BASE),)
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.com.google.clientidbase=android-google
-else
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.com.google.clientidbase=$(PRODUCT_GMS_CLIENTID_BASE)
-endif
-
-ifeq ($(PRODUCT_IS_ATV),true)
-ifeq ($(PRODUCT_ATV_CLIENTID_BASE),)
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.oem.key1=ATV00100020
-else
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.oem.key1=$(PRODUCT_ATV_CLIENTID_BASE)
-endif
-endif
-
-ifeq ($(TARGET_BUILD_VARIANT),eng)
-# Disable ADB authentication
-PRODUCT_SYSTEM_EXT_PROPERTIES += ro.adb.secure=0
-else
-ifdef WITH_ADB_INSECURE
-# Forcebly disable ADB authentication
-PRODUCT_SYSTEM_EXT_PROPERTIES += ro.adb.secure=0
-else
-# Enable ADB authentication
- PRODUCT_SYSTEM_EXT_PROPERTIES += ro.adb.secure=1
-
-# Set ro.debuggable=0 for userdebug
-PRODUCT_NOT_DEBUGGABLE_IN_USERDEBUG := true
-endif
-
-# Disable extra StrictMode features on all non-engineering builds
-PRODUCT_PRODUCT_PROPERTIES += persist.sys.strictmode.disable=true
-endif
-
-# Backup Tool
-PRODUCT_COPY_FILES += \
-    vendor/lineage/prebuilt/common/bin/backuptool.sh:install/bin/backuptool.sh \
-    vendor/lineage/prebuilt/common/bin/backuptool.functions:install/bin/backuptool.functions
-
-PRODUCT_PACKAGES += \
-    50-lineage.sh
-
-PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += \
-    system/addon.d/50-lineage.sh
-
-ifneq ($(strip $(AB_OTA_PARTITIONS) $(AB_OTA_POSTINSTALL_CONFIG)),)
-PRODUCT_COPY_FILES += \
-    vendor/lineage/prebuilt/common/bin/backuptool_ab.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/backuptool_ab.sh \
-    vendor/lineage/prebuilt/common/bin/backuptool_ab.functions:$(TARGET_COPY_OUT_SYSTEM)/bin/backuptool_ab.functions \
-    vendor/lineage/prebuilt/common/bin/backuptool_postinstall.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/backuptool_postinstall.sh
-
-PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += \
-    system/bin/backuptool_ab.sh \
-    system/bin/backuptool_ab.functions \
-    system/bin/backuptool_postinstall.sh
-
-ifneq ($(TARGET_BUILD_VARIANT),user)
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.ota.allow_downgrade=true
-endif
-endif
-
-# Lineage-specific broadcast actions whitelist
-PRODUCT_COPY_FILES += \
-    vendor/lineage/config/permissions/lineage-sysconfig.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/sysconfig/lineage-sysconfig.xml
-
-# Lineage-specific init rc file
-PRODUCT_COPY_FILES += \
-    vendor/lineage/prebuilt/common/etc/init/init.lineage-system_ext.rc:$(TARGET_COPY_OUT_SYSTEM_EXT)/etc/init/init.lineage-system_ext.rc
-
-# Enable SIP+VoIP on all targets
-PRODUCT_COPY_FILES += \
-    frameworks/native/data/etc/android.software.sip.voip.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/permissions/android.software.sip.voip.xml
-
-# Credential storage
-PRODUCT_PACKAGES += \
-    android.software.credentials.prebuilt.xml
-
-# Enable wireless Xbox 360 controller support
-PRODUCT_COPY_FILES += \
-    frameworks/base/data/keyboards/Vendor_045e_Product_028e.kl:$(TARGET_COPY_OUT_PRODUCT)/usr/keylayout/Vendor_045e_Product_0719.kl
-
-# Component overrides
-PRODUCT_PACKAGES += \
-    lineage-component-overrides.xml
-
-# This is Lineage!
-PRODUCT_COPY_FILES += \
-    vendor/lineage/config/permissions/org.lineageos.android.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/permissions/org.lineageos.android.xml
-
-# Enforce privapp-permissions whitelist
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.control_privapp_permissions=enforce
-
-# Memory management & LMKD tuning (BlazeAOSP Performance & Stability)
-PRODUCT_PRODUCT_PROPERTIES += \
-    persist.sys.zram_enabled=1 \
-    ro.lmk.kill_heaviest_task=true \
-    ro.lmk.kill_timeout_ms=100 \
+# Blaze Performance, Frame Pacing, Thermal, LMKD PSI & Liquid Glass Properties
+PRODUCT_SYSTEM_PROPERTIES += \
+    dalvik.vm.usap_pool_enabled=true \
+    persist.device_config.runtime_native.usap_pool_enabled=true \
+    pm.dexopt.bg-dexopt=speed-profile \
+    pm.dexopt.install=speed-profile \
+    dalvik.vm.dex2oat-threads=4 \
+    dalvik.vm.dex2oat-cpu-set=0,1,2,3,4,5 \
     ro.lmk.use_psi=true \
-    ro.lmk.swap_free_low_percentage=20 \
-    ro.lmk.thrashing_limit=30 \
-    ro.lmk.thrashing_limit_decay=10 \
+    ro.lmk.use_minfree_levels=false \
     ro.lmk.psi_partial_stall_ms=70 \
     ro.lmk.psi_complete_stall_ms=700 \
-    ro.lmk.swap_util_max=90 \
+    ro.lmk.swap_free_low_percentage=10 \
+    ro.lmk.thrashing_limit=30 \
+    ro.lmk.thrashing_limit_decay=50 \
+    ro.sys.fw.bg_apps_limit=48 \
+    ro.surface_flinger.use_content_detection_for_refresh_rate=true \
+    ro.surface_flinger.set_touch_timer_ms=200 \
+    ro.surface_flinger.set_idle_timer_ms=250 \
+    ro.surface_flinger.set_display_power_timer_ms=1000 \
+    ro.surface_flinger.max_frame_buffer_acquired_buffers=3 \
     ro.surface_flinger.supports_background_blur=1 \
+    ro.window_blur_supported=true \
     persist.sys.sf.disable_blurs=0 \
-    ro.sf.blurs_are_expensive=0
+    debug.sf.latch_unsignaled=1 \
+    debug.sf.auto_latch_unsignaled=true \
+    debug.hwui.use_hint_manager=true \
+    renderthread.skia.reduceopstasksplitting=true \
+    touch.pressure.scale=0.001 \
+    persist.sys.scrollingcache=3
 
-ifneq ($(TARGET_DISABLE_LINEAGE_SDK), true)
-# Lineage SDK
-include vendor/lineage/config/lineage_sdk_common.mk
+# Blaze Custom Packages
+PRODUCT_PACKAGES += \
+    ThemePicker
+
+# Blaze Prebuilt APKs (Firefox, etc.)
+$(call inherit-product-if-exists, vendor/blaze/prebuilt/blaze_prebuilt.mk)
+
+# GApps / GMS Integration (MindTheGapps, Pixel GMS, or NikGapps)
+ifeq ($(WITH_GMS),true)
+    $(call inherit-product-if-exists, vendor/gapps/arm64/arm64-vendor.mk)
+    $(call inherit-product-if-exists, vendor/gapps/x86_64/x86_64-vendor.mk)
+    $(call inherit-product-if-exists, vendor/gapps/gapps.mk)
+    $(call inherit-product-if-exists, vendor/partner_gms/products/gms.mk)
 endif
 
-# Do not include art debug targets
-PRODUCT_ART_TARGET_INCLUDE_DEBUG_BUILD := false
-
-# Strip the local variable table and the local variable type table to reduce
-# the size of the system image. This has no bearing on stack traces, but will
-# leave less information available via JDWP.
-PRODUCT_MINIMIZE_JAVA_DEBUG_INFO := true
-
-# Enable whole-program R8 Java optimizations for SystemUI and system_server,
-# but also allow explicit overriding for testing and development.
-SYSTEM_OPTIMIZE_JAVA ?= true
-SYSTEMUI_OPTIMIZE_JAVA ?= true
-
-# Disable vendor restrictions
-PRODUCT_RESTRICT_VENDOR_FILES := false
-
-ifneq ($(TARGET_DISABLE_EPPE),true)
-# Require all requested packages to exist
-$(call enforce-product-packages-exist-internal,$(lastword $(_include_stack)),product_manifest.xml rild Calendar android.hidl.memory@1.0-impl.vendor vndk_apex_snapshot_package com.android.ranging vendor_tracing_descriptors)
-endif
-
-# Bootanimation
-TARGET_SCREEN_WIDTH ?= 1080
-TARGET_SCREEN_HEIGHT ?= 1920
-PRODUCT_PACKAGES += \
-    bootanimation.zip \
-    bootanimation-dark.zip
-
-# Lineage interfaces
-PRODUCT_PACKAGES += \
-    framework_compatibility_matrix.lineage.xml
-
-# Lineage packages
-ifeq ($(PRODUCT_IS_ATV),)
-PRODUCT_PACKAGES += \
-    ExactCalculator \
-    Jelly
-
-# BlazeAOSP ships the unmodified Mozilla Firefox release instead of the AOSP
-# and Lineage browser apps.
-PRODUCT_PACKAGES -= Browser2 Jelly
-PRODUCT_PACKAGES += \
-    Firefox
-endif
-
-ifeq ($(PRODUCT_IS_AUTOMOTIVE),)
-PRODUCT_PACKAGES += \
-    LineageParts \
-    LineageSetupWizard
-endif
-
-PRODUCT_PACKAGES += \
-    LineageSettingsProvider \
-    Updater
-
-PRODUCT_COPY_FILES += \
-    vendor/lineage/prebuilt/common/etc/init/init.lineage-updater.rc:$(TARGET_COPY_OUT_SYSTEM_EXT)/etc/init/init.lineage-updater.rc
-
-# Config
-PRODUCT_PACKAGES += \
-    SimpleDeviceConfig \
-    SimpleSettingsConfig
-
-# Extra tools in Lineage
-PRODUCT_PACKAGES += \
-    bash \
-    curl \
-    getcap \
-    htop \
-    nano \
-    setcap \
-    vim
-
-PRODUCT_PACKAGES += \
-    nano_recovery
-
-PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += \
-    system/bin/curl \
-    system/bin/getcap \
-    system/bin/setcap \
-    system/%/libzstd.so
-
-# fastbootd
-ifneq ($(TARGET_DISABLE_FASTBOOTD),true)
-PRODUCT_PACKAGES += \
-    fastbootd
-endif
-
-# Filesystems tools
-PRODUCT_PACKAGES += \
-    fsck.ntfs \
-    mkfs.ntfs \
-    mount.ntfs
-
-PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += \
-    system/bin/fsck.ntfs \
-    system/bin/mkfs.ntfs \
-    system/bin/mount.ntfs \
-    system/%/libfuse-lite.so \
-    system/%/libntfs-3g.so
-
-# FRP
-PRODUCT_COPY_FILES += \
-    vendor/lineage/prebuilt/common/bin/wipe-frp.sh:$(TARGET_COPY_OUT_RECOVERY)/root/system/bin/wipe-frp
-
-# Openssh
-PRODUCT_PACKAGES += \
-    scp \
-    sftp \
-    ssh \
-    sshd \
-    sshd_config \
-    ssh-keygen \
-    start-ssh
-
-PRODUCT_COPY_FILES += \
-    vendor/lineage/prebuilt/common/etc/init/init.openssh.rc:$(TARGET_COPY_OUT_PRODUCT)/etc/init/init.openssh.rc
-
-# OverlayFS
-PRODUCT_PACKAGES_DEBUG += \
-    disable-overlays
-
-# rsync
-PRODUCT_PACKAGES += \
-    rsync
-
-# Storage manager
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.storage_manager.enabled=true
-
-# These packages are excluded from user builds
-PRODUCT_PACKAGES_DEBUG += \
-    procmem
-
-ifneq ($(TARGET_BUILD_VARIANT),user)
-PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += \
-    system/bin/procmem
-endif
-
-# Root
-PRODUCT_PACKAGES += \
-    adb_root
-ifneq ($(TARGET_BUILD_VARIANT),user)
-ifeq ($(WITH_SU),true)
-PRODUCT_PACKAGES += \
-    su
-
-PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += \
-    system/xbin/su
-endif
-endif
-
-# SystemUI
-PRODUCT_DEXPREOPT_SPEED_APPS += \
-    CarSystemUI \
-    SystemUI
-
-PRODUCT_PRODUCT_PROPERTIES += \
-    dalvik.vm.systemuicompilerfilter=speed
-
-ifeq ($(TARGET_BUILD_VARIANT),userdebug)
-PRODUCT_PRODUCT_PROPERTIES += \
-    debug.sf.enable_transaction_tracing=false
-endif
-
-# Audio files
-$(call inherit-product, vendor/lineage/audio/audio.mk)
-
-# SetupWizard
-PRODUCT_PRODUCT_PROPERTIES += \
-    setupwizard.theme=glif_v4 \
-    setupwizard.feature.day_night_mode_enabled=true \
-    persist.vendor.camera.privapp.list=com.google.android.GoogleCamera,org.lineageos.aperture \
-    vendor.camera.aux.packagelist=com.google.android.GoogleCamera,org.lineageos.aperture
-
-PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += vendor/lineage/overlay/no-rro
-PRODUCT_PACKAGE_OVERLAYS += \
-    vendor/lineage/overlay/common \
-    vendor/lineage/overlay/no-rro
-
-PRODUCT_PACKAGES += \
-    DocumentsUIOverlay \
-    NetworkStackOverlay \
-    PermissionControllerOverlay
-
-# Translations
-CUSTOM_LOCALES += \
-    ast_ES \
-    ckb_IQ \
-    ckb_IR \
-    gd_GB \
-    cy_GB \
-    fur_IT \
-    nn_NO
-
-PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += vendor/crowdin/overlay
-PRODUCT_PACKAGE_OVERLAYS += vendor/crowdin/overlay
-
-PRODUCT_EXTRA_RECOVERY_KEYS += \
-    vendor/lineage/build/target/product/security/lineage
-
-PRODUCT_DUMPVARS_SETTINGS += \
-	BLAZE_VERSION
-
-include vendor/lineage/config/version.mk
-
--include vendor/lineage-priv/keys/keys.mk
-
--include $(WORKSPACE)/build_env/image-auto-bits.mk
--include vendor/lineage/config/partner_gms.mk
+# Blaze Banner during build
+$(info )
+$(info ===================================================)
+$(info                   BlazeAOSP 24.0                   )
+$(info ===================================================)
+$(info  Building: $(BLAZE_VERSION))
+$(info ===================================================)
+$(info )

@@ -1,0 +1,21 @@
+// Copyright (C) 2026 BlazeAOSP Project
+// SPDX-License-Identifier: Apache-2.0
+
+// ============================================================
+// BlazeAOSP Prebuilt APKs
+// Add new APKs below following the same pattern.
+// ============================================================
+
+// Firefox (Fenix)
+android_app_import {
+    name: "Firefox",
+    owner: "mozilla",
+    apk: "apk/Firefox.apk",
+    preprocessed: true,
+    presigned: true,
+    dex_preopt: {
+        enabled: false,
+    },
+    privileged: false,
+    product_specific: true,
+}
