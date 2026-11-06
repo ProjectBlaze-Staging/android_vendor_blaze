@@ -1,0 +1,3607 @@
+From 83718cb923172efe111c01a5e5d8c13daa990693 Mon Sep 17 00:00:00 2001
+From: DarkMorpheus-pc <ergunbulutarslan@gmail.com>
+Date: Thu, 5 Nov 2026 23:30:47 +0300
+Subject: [PATCH] SetupWizard: Flagship ColorOS 17 Living Flow, iOS 27 Liquid
+ Glass & Dynamic Island OOBE Studio
+
+Change-Id: I430e99cad99f782068f9269f7f69d833453b6f0c
+---
+ AndroidManifest.xml                           |   2 +-
+ res/drawable-nodpi/blaze_setup_logo.png       | Bin 0 -> 40424 bytes
+ res/drawable/btn_pill_coloros.xml             |  14 +
+ res/drawable/btn_pill_secondary.xml           |  14 +
+ res/drawable/logo.xml                         |  16 +-
+ res/layout/finish_activity.xml                | 111 +++++-
+ res/layout/setup_theme.xml                    | 296 +++++++++++++++-
+ res/layout/welcome_activity.xml               | 206 ++++++-----
+ res/values-tr/strings.xml                     |   8 +-
+ res/values/strings.xml                        |  10 +-
+ .../setupwizard/BaseSetupWizardActivity.java  |   9 +
+ .../setupwizard/DateTimeActivity.java         |   2 +-
+ .../lineageos/setupwizard/FinishActivity.java |  15 +
+ .../lineageos/setupwizard/LocaleActivity.java |   3 +-
+ .../setupwizard/ThemeSettingsActivity.java    | 200 ++++++++++-
+ .../setupwizard/WelcomeActivity.java          |  40 ++-
+ .../setupwizard/util/OobeSpringHelper.java    |  91 +++++
+ .../setupwizard/widget/LuminousBloomView.java | 227 ++++++++++++
+ .../widget/OobeLivePreviewView.java           | 330 ++++++++++++++++++
+ .../widget/ParticleConvergenceView.java       | 248 +++++++++++++
+ .../setupwizard/widget/PeekingMascotView.java | 212 +++++++++++
+ .../setupwizard/widget/TouchRippleLayout.java | 141 ++++++++
+ .../widget/TypewriterTextView.java            | 216 ++++++++++++
+ .../wizardmanager/WizardAction.java           |   7 +
+ .../wizardmanager/WizardManager.java          |   6 +
+ 25 files changed, 2267 insertions(+), 157 deletions(-)
+ create mode 100644 res/drawable-nodpi/blaze_setup_logo.png
+ create mode 100644 res/drawable/btn_pill_coloros.xml
+ create mode 100644 res/drawable/btn_pill_secondary.xml
+ create mode 100644 src/org/lineageos/setupwizard/util/OobeSpringHelper.java
+ create mode 100644 src/org/lineageos/setupwizard/widget/LuminousBloomView.java
+ create mode 100644 src/org/lineageos/setupwizard/widget/OobeLivePreviewView.java
+ create mode 100644 src/org/lineageos/setupwizard/widget/ParticleConvergenceView.java
+ create mode 100644 src/org/lineageos/setupwizard/widget/PeekingMascotView.java
+ create mode 100644 src/org/lineageos/setupwizard/widget/TouchRippleLayout.java
+ create mode 100644 src/org/lineageos/setupwizard/widget/TypewriterTextView.java
+
+diff --git a/AndroidManifest.xml b/AndroidManifest.xml
+index 1808b7b..bc25d77 100644
+--- a/AndroidManifest.xml
++++ b/AndroidManifest.xml
+@@ -106,7 +106,7 @@
+             android:label="@string/activity_label_empty"
+             android:configChanges="mcc|mnc"
+             android:immersive="true"
+-            android:exported="false"
++            android:exported="true"
+             android:windowSoftInputMode="stateAlwaysHidden">
+             <intent-filter>
+                 <action android:name="org.lineageos.setupwizard.LINEAGE_WELCOME" />
+diff --git a/res/drawable-nodpi/blaze_setup_logo.png b/res/drawable-nodpi/blaze_setup_logo.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..4e60196d6af9a3ad0a0100284b80e82a8a1604f0
+GIT binary patch
+literal 40424
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/res/drawable/btn_pill_coloros.xml b/res/drawable/btn_pill_coloros.xml
+new file mode 100644
+index 0000000..9aeb93e
+--- /dev/null
++++ b/res/drawable/btn_pill_coloros.xml
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 The BlazeAOSP Project
++     SPDX-License-Identifier: Apache-2.0
++-->
++<ripple xmlns:android="http://schemas.android.com/apk/res/android"
++    android:color="#40FFFFFF">
++    <item>
++        <shape android:shape="rectangle">
++            <solid android:color="#0066FF" />
++            <corners android:radius="32dp" />
++        </shape>
++    </item>
++</ripple>
+diff --git a/res/drawable/btn_pill_secondary.xml b/res/drawable/btn_pill_secondary.xml
+new file mode 100644
+index 0000000..60edc7b
+--- /dev/null
++++ b/res/drawable/btn_pill_secondary.xml
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 The BlazeAOSP Project
++     SPDX-License-Identifier: Apache-2.0
++-->
++<ripple xmlns:android="http://schemas.android.com/apk/res/android"
++    android:color="#20000000">
++    <item>
++        <shape android:shape="rectangle">
++            <solid android:color="#12000000" />
++            <corners android:radius="32dp" />
++        </shape>
++    </item>
++</ripple>
+diff --git a/res/drawable/logo.xml b/res/drawable/logo.xml
+index 127dd0c..2ecdba1 100644
+--- a/res/drawable/logo.xml
++++ b/res/drawable/logo.xml
+@@ -1,17 +1,9 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!--
+-     SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-FileCopyrightText: 2026 The BlazeAOSP Project
+      SPDX-License-Identifier: Apache-2.0
+ -->
+-<vector xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:width="512dp"
+-    android:height="260dp"
+-    android:viewportWidth="512"
+-    android:viewportHeight="260">
++<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
++    android:src="@drawable/blaze_setup_logo"
++    android:gravity="center" />
+ 
+-    <path
+-        android:fillColor="@color/lineage_accent"
+-        android:pathData="M416,128a39.92,39.92,0,0,0-31.11,14.87l-1.5-.6A294.79,294.79,0,0,0,336,128.14s0-.09,0-.14a80,80,0,1,0-160,0s0,.09,0,.13l-1.72
+-.38 a293.48,293.48,0,0,0-45.67,13.76l-1.5 .6
+-a40,40,0,1,0,7.39,14.28h0a277.33,277.33,0,0,1,43.1-13,80,80,0,0,0,156.73,0,277.3,277.3,0,0,1,43.11,13h0A40,40,0,1,0,416,128ZM96,192a24,24,0,1,1,24-24A24,24,0,0,1,96,192Zm160,0a64,64,0,1,1,64-64A64.07,64.07,0,0,1,256,192Zm160,0a24,24,0,1,1,24-24A24,24,0,0,1,416,192ZM288,128a32,32,0,1,1-32-32A32,32,0,0,1,288,128Z" />
+-</vector>
+diff --git a/res/layout/finish_activity.xml b/res/layout/finish_activity.xml
+index d6444c8..35b26d0 100644
+--- a/res/layout/finish_activity.xml
++++ b/res/layout/finish_activity.xml
+@@ -2,6 +2,7 @@
+ <!--
+      SPDX-FileCopyrightText: 2016 The CyanogenMod Project
+      SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-FileCopyrightText: 2026 The BlazeAOSP Project
+      SPDX-License-Identifier: Apache-2.0
+ -->
+ <android.widget.FrameLayout
+@@ -14,30 +15,126 @@
+     android:fitsSystemWindows="true"
+     app:insetForeground="@android:color/transparent">
+ 
++    <!-- ColorOS 17 Living Flow 3D Ribbon Backdrop -->
++    <org.lineageos.setupwizard.widget.LuminousBloomView
++        android:id="@+id/finish_bloom_background"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent" />
++
+     <ImageView
+         android:id="@+id/background"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+-        android:background="@drawable/background"
+-        android:visibility="visible"/>
++        android:visibility="gone" />
+ 
+     <LinearLayout
+         android:id="@+id/linear_layout"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+         android:orientation="vertical"
++        android:gravity="center_horizontal"
+         style="@style/SudContentFrame">
+ 
++        <!-- Compatibility logo view -->
+         <ImageView
+             android:id="@+id/brand_logo"
++            android:layout_width="0dp"
++            android:layout_height="0dp"
++            android:src="@drawable/logo"
++            android:visibility="gone" />
++
++        <!-- Center Area: Particle Convergence + "17" Living Flow Core + Finale Typography -->
++        <LinearLayout
++            android:id="@+id/finish_hero_container"
+             android:layout_width="match_parent"
+-            android:layout_height="0px"
++            android:layout_height="0dp"
+             android:layout_weight="1"
+-            android:src="@drawable/logo"
+-            android:adjustViewBounds="true"
+-            android:scaleType="fitCenter"
++            android:orientation="vertical"
+             android:gravity="center"
+-            android:padding="@dimen/content_margin_left"/>
++            android:paddingStart="24dp"
++            android:paddingEnd="24dp">
++
++            <org.lineageos.setupwizard.widget.ParticleConvergenceView
++                android:id="@+id/finish_particles"
++                android:layout_width="match_parent"
++                android:layout_height="230dp" />
++
++            <TextView
++                android:id="@+id/finish_title"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:text="Her Şey Hazır."
++                android:textColor="#FFFFFF"
++                android:textSize="32sp"
++                android:fontFamily="sans-serif-medium"
++                android:textStyle="bold"
++                android:layout_marginTop="8dp" />
++
++            <TextView
++                android:id="@+id/finish_subtitle"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:text="BlazeAOSP 17 • İpeksi Akıcılık ve Living Flow deneyimine hoş geldiniz."
++                android:textColor="#D8E6F8"
++                android:textSize="15sp"
++                android:gravity="center"
++                android:layout_marginTop="8dp" />
++
++            <!-- Feature Summary Pills -->
++            <LinearLayout
++                android:id="@+id/finish_feature_pills"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:orientation="horizontal"
++                android:gravity="center"
++                android:layout_marginTop="18dp">
++
++                <TextView
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:background="@drawable/btn_pill_secondary"
++                    android:paddingStart="12dp"
++                    android:paddingEnd="12dp"
++                    android:paddingTop="6dp"
++                    android:paddingBottom="6dp"
++                    android:text="120Hz Laminar Flow"
++                    android:textColor="#FFFFFF"
++                    android:textSize="11.5sp" />
++
++                <Space
++                    android:layout_width="8dp"
++                    android:layout_height="1dp" />
++
++                <TextView
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:background="@drawable/btn_pill_secondary"
++                    android:paddingStart="12dp"
++                    android:paddingEnd="12dp"
++                    android:paddingTop="6dp"
++                    android:paddingBottom="6dp"
++                    android:text="Liquid Glass"
++                    android:textColor="#FFFFFF"
++                    android:textSize="11.5sp" />
++
++                <Space
++                    android:layout_width="8dp"
++                    android:layout_height="1dp" />
++
++                <TextView
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:background="@drawable/btn_pill_secondary"
++                    android:paddingStart="12dp"
++                    android:paddingEnd="12dp"
++                    android:paddingTop="6dp"
++                    android:paddingBottom="6dp"
++                    android:text="Dinamik Ada"
++                    android:textColor="#FFFFFF"
++                    android:textSize="11.5sp" />
++            </LinearLayout>
++
++        </LinearLayout>
+ 
+         <org.lineageos.setupwizard.NavigationLayout
+             android:id="@+id/navigation_bar"
+diff --git a/res/layout/setup_theme.xml b/res/layout/setup_theme.xml
+index 77fab2f..8cc4e04 100644
+--- a/res/layout/setup_theme.xml
++++ b/res/layout/setup_theme.xml
+@@ -1,6 +1,7 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!--
+      SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-FileCopyrightText: 2026 The BlazeAOSP Project
+      SPDX-License-Identifier: Apache-2.0
+ -->
+ <com.google.android.setupdesign.GlifLayout
+@@ -14,7 +15,7 @@
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+         style="@style/SudContentFrame"
+-        android:layout_marginTop="@dimen/base_margin_top">
++        android:layout_marginTop="8dp">
+ 
+         <FrameLayout
+             android:id="@+id/page"
+@@ -25,24 +26,291 @@
+             <ScrollView
+                 android:layout_width="match_parent"
+                 android:layout_height="match_parent"
+-                android:fillViewport="true">
++                android:fillViewport="true"
++                android:scrollbars="none">
+ 
+-                <RadioGroup
+-                    android:id="@+id/theme_radio_group"
++                <LinearLayout
++                    android:id="@+id/oobe_studio_container"
+                     android:layout_width="match_parent"
+-                    android:layout_height="wrap_content">
++                    android:layout_height="wrap_content"
++                    android:orientation="vertical"
++                    android:paddingBottom="18dp">
+ 
+-                    <RadioButton
+-                        android:id="@+id/radio_dark"
+-                        android:text="@string/dark"
+-                        style="@style/SudRadioButton" />
++                    <!-- 1. Live 120Hz Interactive Preview Stage -->
++                    <org.lineageos.setupwizard.widget.OobeLivePreviewView
++                        android:id="@+id/oobe_live_preview"
++                        android:layout_width="match_parent"
++                        android:layout_height="168dp"
++                        android:layout_marginBottom="14dp" />
+ 
+-                    <RadioButton
+-                        android:id="@+id/radio_light"
+-                        android:text="@string/light"
+-                        style="@style/SudRadioButton" />
++                    <!-- 2. Section: Sistem Görünümü (Karanlık / Aydınlık) -->
++                    <TextView
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:text="SİSTEM TEMA MODU"
++                        android:textSize="11sp"
++                        android:letterSpacing="0.08"
++                        android:textStyle="bold"
++                        android:textColor="?android:attr/colorAccent"
++                        android:layout_marginBottom="8dp" />
+ 
+-                </RadioGroup>
++                    <LinearLayout
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:orientation="horizontal"
++                        android:baselineAligned="false"
++                        android:layout_marginBottom="14dp">
++
++                        <LinearLayout
++                            android:id="@+id/card_theme_dark"
++                            android:layout_width="0dp"
++                            android:layout_height="wrap_content"
++                            android:layout_weight="1"
++                            android:orientation="vertical"
++                            android:padding="14dp"
++                            android:layout_marginEnd="6dp"
++                            android:clickable="true"
++                            android:focusable="true">
++
++                            <TextView
++                                android:layout_width="wrap_content"
++                                android:layout_height="wrap_content"
++                                android:text="Karanlık Mod"
++                                android:textSize="15sp"
++                                android:textStyle="bold"
++                                android:textColor="?android:attr/textColorPrimary" />
++
++                            <TextView
++                                android:layout_width="wrap_content"
++                                android:layout_height="wrap_content"
++                                android:text="Cosmos Indigo &amp; OLED"
++                                android:textSize="12sp"
++                                android:textColor="?android:attr/textColorSecondary"
++                                android:layout_marginTop="2dp" />
++                        </LinearLayout>
++
++                        <LinearLayout
++                            android:id="@+id/card_theme_light"
++                            android:layout_width="0dp"
++                            android:layout_height="wrap_content"
++                            android:layout_weight="1"
++                            android:orientation="vertical"
++                            android:padding="14dp"
++                            android:layout_marginStart="6dp"
++                            android:clickable="true"
++                            android:focusable="true">
++
++                            <TextView
++                                android:layout_width="wrap_content"
++                                android:layout_height="wrap_content"
++                                android:text="Aydınlık Mod"
++                                android:textSize="15sp"
++                                android:textStyle="bold"
++                                android:textColor="?android:attr/textColorPrimary" />
++
++                            <TextView
++                                android:layout_width="wrap_content"
++                                android:layout_height="wrap_content"
++                                android:text="Pearl Dawn &amp; Kristal"
++                                android:textSize="12sp"
++                                android:textColor="?android:attr/textColorSecondary"
++                                android:layout_marginTop="2dp" />
++                        </LinearLayout>
++                    </LinearLayout>
++
++                    <!-- Hidden legacy RadioGroup for 100% compatibility -->
++                    <RadioGroup
++                        android:id="@+id/theme_radio_group"
++                        android:layout_width="0dp"
++                        android:layout_height="0dp"
++                        android:visibility="gone">
++
++                        <RadioButton
++                            android:id="@+id/radio_dark"
++                            android:text="@string/dark"
++                            style="@style/SudRadioButton" />
++
++                        <RadioButton
++                            android:id="@+id/radio_light"
++                            android:text="@string/light"
++                            style="@style/SudRadioButton" />
++                    </RadioGroup>
++
++                    <!-- 3. Section: Liquid Glass & Arayüz Yüzey Stili -->
++                    <TextView
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:text="LIQUID GLASS &amp; ARAYÜZ MİMARİSİ"
++                        android:textSize="11sp"
++                        android:letterSpacing="0.08"
++                        android:textStyle="bold"
++                        android:textColor="?android:attr/colorAccent"
++                        android:layout_marginBottom="8dp" />
++
++                    <LinearLayout
++                        android:id="@+id/card_glass_ios27"
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:orientation="vertical"
++                        android:padding="13dp"
++                        android:layout_marginBottom="8dp"
++                        android:clickable="true"
++                        android:focusable="true">
++
++                        <TextView
++                            android:layout_width="wrap_content"
++                            android:layout_height="wrap_content"
++                            android:text="iOS 27 Koyu Füme Kristal + Mercek Kapsülü"
++                            android:textSize="14.5sp"
++                            android:textStyle="bold"
++                            android:textColor="?android:attr/textColorPrimary" />
++
++                        <TextView
++                            android:layout_width="wrap_content"
++                            android:layout_height="wrap_content"
++                            android:text="Koyu füme cam yüzey, parlak prizmatik kenar ve aktif sekme merceği"
++                            android:textSize="12sp"
++                            android:textColor="?android:attr/textColorSecondary"
++                            android:layout_marginTop="2dp" />
++                    </LinearLayout>
++
++                    <LinearLayout
++                        android:id="@+id/card_glass_hybrid"
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:orientation="vertical"
++                        android:padding="13dp"
++                        android:layout_marginBottom="8dp"
++                        android:clickable="true"
++                        android:focusable="true">
++
++                        <TextView
++                            android:layout_width="wrap_content"
++                            android:layout_height="wrap_content"
++                            android:text="ColorOS 17 Living Flow + iOS Liquid Glass"
++                            android:textSize="14.5sp"
++                            android:textStyle="bold"
++                            android:textColor="?android:attr/textColorPrimary" />
++
++                        <TextView
++                            android:layout_width="wrap_content"
++                            android:layout_height="wrap_content"
++                            android:text="Yüzen Bento kart düzeni ve kırınımlı kristal cam efektleri"
++                            android:textSize="12sp"
++                            android:textColor="?android:attr/textColorSecondary"
++                            android:layout_marginTop="2dp" />
++                    </LinearLayout>
++
++                    <LinearLayout
++                        android:id="@+id/card_glass_frosted"
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:orientation="vertical"
++                        android:padding="13dp"
++                        android:layout_marginBottom="14dp"
++                        android:clickable="true"
++                        android:focusable="true">
++
++                        <TextView
++                            android:layout_width="wrap_content"
++                            android:layout_height="wrap_content"
++                            android:text="One UI 9 Yumuşak Buzlu Cam (Dengeli)"
++                            android:textSize="14.5sp"
++                            android:textStyle="bold"
++                            android:textColor="?android:attr/textColorPrimary" />
++
++                        <TextView
++                            android:layout_width="wrap_content"
++                            android:layout_height="wrap_content"
++                            android:text="Yumuşak saten bulanıklık ve yüksek okunabilirlik odaklı yüzeyler"
++                            android:textSize="12sp"
++                            android:textColor="?android:attr/textColorSecondary"
++                            android:layout_marginTop="2dp" />
++                    </LinearLayout>
++
++                    <!-- 4. Section: Dinamik Ada & Laminar Flow Deneyimi -->
++                    <TextView
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:text="DİNAMİK ADA &amp; HAREKET MOTORU"
++                        android:textSize="11sp"
++                        android:letterSpacing="0.08"
++                        android:textStyle="bold"
++                        android:textColor="?android:attr/colorAccent"
++                        android:layout_marginBottom="8dp" />
++
++                    <LinearLayout
++                        android:id="@+id/card_toggle_island_messages"
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:orientation="horizontal"
++                        android:gravity="center_vertical"
++                        android:padding="13dp"
++                        android:layout_marginBottom="8dp"
++                        android:clickable="true"
++                        android:focusable="true">
++
++                        <LinearLayout
++                            android:layout_width="0dp"
++                            android:layout_height="wrap_content"
++                            android:layout_weight="1"
++                            android:orientation="vertical">
++
++                            <TextView
++                                android:layout_width="wrap_content"
++                                android:layout_height="wrap_content"
++                                android:text="Dinamik Ada Canlı Mesaj &amp; Zamanlayıcılar"
++                                android:textSize="14sp"
++                                android:textStyle="bold"
++                                android:textColor="?android:attr/textColorPrimary" />
++
++                            <TextView
++                                android:id="@+id/summary_island_messages"
++                                android:layout_width="wrap_content"
++                                android:layout_height="wrap_content"
++                                android:text="Aktif • Gelen mesajlar ve sayaçlar Dinamik Ada'da açılır"
++                                android:textSize="12sp"
++                                android:textColor="?android:attr/textColorSecondary"
++                                android:layout_marginTop="2dp" />
++                        </LinearLayout>
++                    </LinearLayout>
++
++                    <LinearLayout
++                        android:id="@+id/card_toggle_floating_tabs"
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:orientation="horizontal"
++                        android:gravity="center_vertical"
++                        android:padding="13dp"
++                        android:clickable="true"
++                        android:focusable="true">
++
++                        <LinearLayout
++                            android:layout_width="0dp"
++                            android:layout_height="wrap_content"
++                            android:layout_weight="1"
++                            android:orientation="vertical">
++
++                            <TextView
++                                android:layout_width="wrap_content"
++                                android:layout_height="wrap_content"
++                                android:text="Yüzen Liquid Glass Alt Sekme Barı &amp; 120Hz Yay Fiziği"
++                                android:textSize="14sp"
++                                android:textStyle="bold"
++                                android:textColor="?android:attr/textColorPrimary" />
++
++                            <TextView
++                                android:id="@+id/summary_floating_tabs"
++                                android:layout_width="wrap_content"
++                                android:layout_height="wrap_content"
++                                android:text="Aktif • Laminar Flow 120Hz dokunsal yay tepkimesi"
++                                android:textSize="12sp"
++                                android:textColor="?android:attr/textColorSecondary"
++                                android:layout_marginTop="2dp" />
++                        </LinearLayout>
++                    </LinearLayout>
++
++                </LinearLayout>
+             </ScrollView>
+         </FrameLayout>
+ 
+diff --git a/res/layout/welcome_activity.xml b/res/layout/welcome_activity.xml
+index b5b3ef0..9b79910 100644
+--- a/res/layout/welcome_activity.xml
++++ b/res/layout/welcome_activity.xml
+@@ -1,132 +1,144 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!--
+      SPDX-FileCopyrightText: 2016 The CyanogenMod Project
+-     SPDX-FileCopyrightText: The LineageOS Project
++     SPDX-FileCopyrightText: 2026 The BlazeAOSP Project
+      SPDX-License-Identifier: Apache-2.0
+ -->
+-<com.google.android.setupdesign.GlifLayout
++<FrameLayout
+     xmlns:android="http://schemas.android.com/apk/res/android"
+     android:id="@+id/setup_wizard_layout"
+     android:layout_width="match_parent"
+-    android:layout_height="match_parent">
++    android:layout_height="match_parent"
++    android:background="#000000">
+ 
+-    <LinearLayout
++    <!-- 1. ColorOS 17 Organic Luminous Bloom Background -->
++    <org.lineageos.setupwizard.widget.LuminousBloomView
++        android:id="@+id/bloom_background"
+         android:layout_width="match_parent"
+-        android:layout_height="match_parent"
+-        android:orientation="vertical">
++        android:layout_height="match_parent" />
++
++    <!-- 2. Interactive Touch Ripple & Gaze Layer -->
++    <org.lineageos.setupwizard.widget.TouchRippleLayout
++        android:id="@+id/touch_ripple_layout"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent">
+ 
+         <LinearLayout
+             android:layout_width="match_parent"
+-            android:layout_height="0dp"
+-            android:layout_weight="1"
++            android:layout_height="match_parent"
+             android:orientation="vertical"
+-            android:gravity="center_vertical">
++            android:paddingBottom="130dp"
++            android:fitsSystemWindows="true">
++
++            <!-- Top Area: Peeking Mascot under the punch-hole notch -->
++            <org.lineageos.setupwizard.widget.PeekingMascotView
++                android:id="@+id/peeking_mascot"
++                android:layout_width="match_parent"
++                android:layout_height="36dp"
++                android:layout_marginTop="12dp" />
+ 
+-            <Space
++            <!-- Typewriter Greetings + Gradient Subtitle -->
++            <org.lineageos.setupwizard.widget.TypewriterTextView
++                android:id="@+id/typewriter_text"
+                 android:layout_width="match_parent"
++                android:layout_height="wrap_content"
++                android:layout_marginStart="28dp"
++                android:layout_marginEnd="28dp"
++                android:layout_marginTop="20dp" />
++
++            <!-- Compatibility views for BaseSetupWizardActivity / WelcomeActivity lookups -->
++            <TextView
++                android:id="@+id/welcome_title"
++                android:layout_width="0dp"
+                 android:layout_height="0dp"
+-                android:layout_weight="2" />
++                android:visibility="gone" />
+ 
+             <ImageView
+                 android:id="@+id/brand_logo"
+-                android:layout_width="match_parent"
+-                android:layout_height="wrap_content"
+-                android:adjustViewBounds="true"
+-                android:scaleType="centerCrop"
+-                android:src="@drawable/logo" />
++                android:layout_width="0dp"
++                android:layout_height="0dp"
++                android:visibility="gone" />
+ 
+-            <Space
++            <!-- Center Area: Magnetic Particle Constellation Convergence -->
++            <org.lineageos.setupwizard.widget.ParticleConvergenceView
++                android:id="@+id/particle_convergence"
+                 android:layout_width="match_parent"
+                 android:layout_height="0dp"
+-                android:layout_weight="0.5" />
++                android:layout_weight="1" />
++
+         </LinearLayout>
+ 
++        <!-- Bottom Action Controls: Anchored firmly to bottom of FrameLayout -->
+         <LinearLayout
+-            android:layout_width="fill_parent"
++            android:layout_width="match_parent"
+             android:layout_height="wrap_content"
+             android:layout_gravity="bottom"
+-            android:orientation="vertical">
++            android:orientation="vertical"
++            android:paddingStart="24dp"
++            android:paddingEnd="24dp"
++            android:paddingBottom="42dp">
++
++            <Button
++                android:id="@+id/start"
++                android:layout_width="match_parent"
++                android:layout_height="56dp"
++                android:background="@drawable/btn_pill_coloros"
++                android:text="@string/start"
++                android:textColor="#FFFFFF"
++                android:textSize="17sp"
++                android:textAllCaps="false"
++                android:fontFamily="sans-serif-medium"
++                android:elevation="6dp" />
+ 
+             <LinearLayout
+-                style="@style/SudContentFrame"
+-                android:layout_width="fill_parent"
++                android:layout_width="match_parent"
+                 android:layout_height="wrap_content"
+-                android:layout_gravity="bottom"
+-                android:orientation="vertical"
+-                android:paddingStart="@dimen/welcome_content_container_padding_start"
+-                android:paddingEnd="@dimen/welcome_content_container_padding_end"
+-                android:paddingBottom="@dimen/welcome_content_container_padding_bottom">
+-
+-                <TextView
+-                    style="@style/WelcomeTitle"
+-                    android:id="@+id/welcome_title"
+-                    android:layout_width="fill_parent"
+-                    android:layout_height="wrap_content"
+-                    android:hyphenationFrequency="none"
+-                    android:paddingBottom="@dimen/welcome_content_container_padding_bottom" />
+-
+-                <LinearLayout
+-                    android:layout_width="fill_parent"
+-                    android:layout_height="wrap_content"
+-                    android:animateLayoutChanges="true"
+-                    android:focusableInTouchMode="true"
+-                    android:importantForAccessibility="no"
+-                    android:orientation="vertical">
+-
+-                    <Button
+-                        android:id="@+id/launch_accessibility"
+-                        style="@style/SudGlifButton.Secondary"
+-                        android:layout_width="fill_parent"
+-                        android:layout_height="fill_parent"
+-                        android:layout_gravity="center_vertical"
+-                        android:drawableStart="@drawable/ic_eye"
+-                        android:gravity="start|center"
+-                        android:drawablePadding="@dimen/welcome_content_container_padding_end"
+-                        android:textSize="@dimen/welcome_accessibility_text_size"
+-                        android:textColor="?android:textColorPrimary"
+-                        android:text="@string/accessibility_settings" />
+-                </LinearLayout>
++                android:orientation="horizontal"
++                android:gravity="center"
++                android:layout_marginTop="14dp">
++
++                <Button
++                    android:id="@+id/emerg_dialer"
++                    android:layout_width="wrap_content"
++                    android:layout_height="40dp"
++                    android:background="@drawable/btn_pill_secondary"
++                    android:text="@string/emergency_call"
++                    android:textColor="#FFFFFF"
++                    android:textSize="13sp"
++                    android:textAllCaps="false"
++                    android:paddingStart="16dp"
++                    android:paddingEnd="16dp" />
++
++                <Space
++                    android:layout_width="16dp"
++                    android:layout_height="1dp" />
++
++                <Button
++                    android:id="@+id/launch_accessibility"
++                    android:layout_width="wrap_content"
++                    android:layout_height="40dp"
++                    android:background="@drawable/btn_pill_secondary"
++                    android:text="@string/accessibility_settings"
++                    android:textColor="#FFFFFF"
++                    android:textSize="13sp"
++                    android:textAllCaps="false"
++                    android:paddingStart="16dp"
++                    android:paddingEnd="16dp" />
++
++                <Button
++                    android:id="@+id/skip"
++                    android:layout_width="wrap_content"
++                    android:layout_height="40dp"
++                    android:background="@drawable/btn_pill_secondary"
++                    android:text="@string/skip"
++                    android:textColor="#FFFFFF"
++                    android:textSize="13sp"
++                    android:textAllCaps="false"
++                    android:visibility="gone"
++                    android:layout_marginStart="8dp" />
+             </LinearLayout>
+-
+         </LinearLayout>
+ 
+-        <LinearLayout
+-            style="@style/SudGlifButtonBar.Stackable"
+-            android:layout_width="fill_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_gravity="bottom">
+-
+-            <Button
+-                android:id="@+id/emerg_dialer"
+-                style="@style/SudGlifButton.Secondary"
+-                android:layout_width="wrap_content"
+-                android:layout_height="wrap_content"
+-                android:text="@string/emergency_call" />
+-
+-            <Space
+-                android:layout_width="0.0dip"
+-                android:layout_height="0.0dip"
+-                android:layout_weight="1.0" />
++    </org.lineageos.setupwizard.widget.TouchRippleLayout>
+ 
+-            <Button
+-                android:id="@+id/skip"
+-                style="@style/SudGlifButton.Secondary"
+-                android:layout_width="wrap_content"
+-                android:layout_height="wrap_content"
+-                android:text="@string/skip"
+-                android:visibility="gone" />
+-
+-            <Space
+-                android:layout_width="0.0dip"
+-                android:layout_height="0.0dip"
+-                android:layout_weight="1.0" />
+-
+-            <Button
+-                android:id="@id/start"
+-                style="@style/SudGlifButton.Primary"
+-                android:layout_width="wrap_content"
+-                android:layout_height="wrap_content"
+-                android:text="@string/start" />
+-        </LinearLayout>
+-    </LinearLayout>
+-</com.google.android.setupdesign.GlifLayout>
++</FrameLayout>
+diff --git a/res/values-tr/strings.xml b/res/values-tr/strings.xml
+index c253dc7..1ac15aa 100644
+--- a/res/values-tr/strings.xml
++++ b/res/values-tr/strings.xml
+@@ -31,12 +31,12 @@
+     <string name="setup_location">Konum servisleri</string>
+     <string name="location_access_summary"><b>Konum bilginizi isteyen uygulamalara izin ver.</b> Bu geçerli konumunuzu ve geçmiş konumlarınızı içerebilir.</string>
+     <string name="location_agps_access_summary">GPS\'inizin başlama süresini büyük ölçüde hızlandırmak için &lt;b&gt;internetten uydu yardım verilerini indirin.&lt;b&gt;</string>
+-    <string name="update_recovery_title">Lineage Kurtarma Modunu Güncelle</string>
+-    <string name="update_recovery_description">Her güncellemeden sonraki ilk açılışta Lineage Kurtarma Modunu günceller.</string>
++    <string name="update_recovery_title">Blaze Kurtarma Modunu Güncelle</string>
++    <string name="update_recovery_description">Her güncellemeden sonraki ilk açılışta Blaze Kurtarma Modunu günceller.</string>
+     <string name="update_recovery_warning">Kurulum tamamlanır tamamlanmaz kurtarma modu güncellenecektir. Olduğu gibi kalmasını istiyorsanız, bu özelliği devre dışı bırakın.</string>
+-    <string name="update_recovery_setting">İşletim Sistemi ile birlikte Lineage Kurtarma Modunu güncelleyin</string>
++    <string name="update_recovery_setting">İşletim Sistemi ile birlikte Blaze Kurtarma Modunu güncelleyin</string>
+     <string name="update_recovery_full_description"><xliff:g id="recovery_update_description">%1$s</xliff:g>\n<xliff:g id="recovery_update_warning">%2$s</xliff:g></string>
+-    <string name="setup_services">LineageOS özellikleri</string>
++    <string name="setup_services">BlazeAOSP özellikleri</string>
+     <string name="services_pp_explanation">Bu hizmetler, cihazınızın özelliklerini genişletmeniz için çalışır. Veri <xliff:g id="name" example="LineageOS">%1$s</xliff:g>\'un gizlilik politikası ile kullanılacaktır.</string>
+     <string name="services_find_privacy_policy">Gizlilik politikasını farklı cihazla <xliff:g id="uri" example="https://lineageos.org/legal">%1$s</xliff:g> adresini ziyaret ederek okuyabilirsiniz</string>
+     <string name="services_help_improve_cm"><xliff:g id="name" example="LineageOS">%s</xliff:g>\'u geliştirmeye yardımcı olun</string>
+diff --git a/res/values/strings.xml b/res/values/strings.xml
+index 9603f48..663ff3d 100644
+--- a/res/values/strings.xml
++++ b/res/values/strings.xml
+@@ -6,7 +6,7 @@
+ -->
+ <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+     <string name="app_name">Setup Wizard</string>
+-    <string name="os_name" translatable="false">LineageOS</string>
++    <string name="os_name" translatable="false">BlazeAOSP</string>
+ 
+     <string name="lineage_wizard_script_uri" translatable="false">android.resource://org.lineageos.setupwizard/raw/lineage_wizard_script</string>
+     <string name="lineage_wizard_script_user_uri" translatable="false">android.resource://org.lineageos.setupwizard/raw/lineage_wizard_script_user</string>
+@@ -53,14 +53,14 @@
+     <string name="location_agps_access_summary">When location is on, <b>download satellite assistance data from the internet</b>, which can greatly improve the GPS startup performance.</string>
+ 
+     <!-- Recovery update page -->
+-    <string name="update_recovery_title">Update Lineage Recovery</string>
+-    <string name="update_recovery_description">Updates Lineage Recovery on first boot subsequent to every update.</string>
++    <string name="update_recovery_title">Update Blaze Recovery</string>
++    <string name="update_recovery_description">Updates Blaze Recovery on first boot subsequent to every update.</string>
+     <string name="update_recovery_warning">Recovery will be updated as soon as you finish the setup. If you wish to keep it intact, disable this feature.</string>
+-    <string name="update_recovery_setting">Update Lineage Recovery alongside the OS</string>
++    <string name="update_recovery_setting">Update Blaze Recovery alongside the OS</string>
+     <string name="update_recovery_full_description"><xliff:g id="recovery_update_description">%1$s</xliff:g>\n<xliff:g id="recovery_update_warning">%2$s</xliff:g></string>
+ 
+     <!-- LineageOS features page -->
+-    <string name="setup_services">LineageOS features</string>
++    <string name="setup_services">BlazeAOSP features</string>
+     <string name="services_pp_explanation">These services work for you to extend the capabilities of your device. Data will be used in accordance with <xliff:g id="name" example="LineageOS">%1$s</xliff:g>\'s privacy policy.</string>
+     <string name="services_find_privacy_policy">You can read the privacy policy on another device by visiting <xliff:g id="uri" example="https://lineageos.org/legal">%1$s</xliff:g></string>
+     <string name="services_privacy_policy_uri" translatable="false">https://lineageos.org/legal</string>
+diff --git a/src/org/lineageos/setupwizard/BaseSetupWizardActivity.java b/src/org/lineageos/setupwizard/BaseSetupWizardActivity.java
+index 828f12f..22ac2c4 100644
+--- a/src/org/lineageos/setupwizard/BaseSetupWizardActivity.java
++++ b/src/org/lineageos/setupwizard/BaseSetupWizardActivity.java
+@@ -65,6 +65,15 @@ public abstract class BaseSetupWizardActivity extends AppCompatActivity implemen
+         mNavigationBar = getNavigationBar();
+         if (mNavigationBar != null) {
+             mNavigationBar.setNavigationBarListener(this);
++            org.lineageos.setupwizard.util.OobeSpringHelper.attachTouchSpring(
++                    mNavigationBar.getNextButton(), 0.94f);
++            org.lineageos.setupwizard.util.OobeSpringHelper.attachTouchSpring(
++                    mNavigationBar.getSkipButton(), 0.95f);
++        }
++        final View pageView = findViewById(R.id.page);
++        if (pageView != null) {
++            org.lineageos.setupwizard.util.OobeSpringHelper.playEntranceCascade(
++                    pageView, mNavigationBar);
+         }
+         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+             @Override
+diff --git a/src/org/lineageos/setupwizard/DateTimeActivity.java b/src/org/lineageos/setupwizard/DateTimeActivity.java
+index b75b672..7cfe86d 100644
+--- a/src/org/lineageos/setupwizard/DateTimeActivity.java
++++ b/src/org/lineageos/setupwizard/DateTimeActivity.java
+@@ -130,7 +130,7 @@ public class DateTimeActivity extends BaseSetupWizardActivity implements
+         filter.addAction(Intent.ACTION_TIME_TICK);
+         filter.addAction(Intent.ACTION_TIME_CHANGED);
+         filter.addAction(Intent.ACTION_TIMEZONE_CHANGED);
+-        registerReceiver(mIntentReceiver, filter, null, null);
++        registerReceiver(mIntentReceiver, filter, null, null, Context.RECEIVER_NOT_EXPORTED);
+ 
+         updateTimeAndDateDisplay();
+     }
+diff --git a/src/org/lineageos/setupwizard/FinishActivity.java b/src/org/lineageos/setupwizard/FinishActivity.java
+index 0e1b0db..ebf9742 100644
+--- a/src/org/lineageos/setupwizard/FinishActivity.java
++++ b/src/org/lineageos/setupwizard/FinishActivity.java
+@@ -72,6 +72,21 @@ public class FinishActivity extends BaseSetupWizardActivity {
+ 
+         // Ensure the main layout (not including the background view) does not get obscured by bars.
+         mRootView = findViewById(R.id.root);
++        org.lineageos.setupwizard.widget.LuminousBloomView bloomView =
++                findViewById(R.id.finish_bloom_background);
++        org.lineageos.setupwizard.widget.ParticleConvergenceView particles =
++                findViewById(R.id.finish_particles);
++        View titleView = findViewById(R.id.finish_title);
++        View subtitleView = findViewById(R.id.finish_subtitle);
++        View pillsView = findViewById(R.id.finish_feature_pills);
++        if (bloomView != null) {
++            bloomView.startBloomAnimation(2000, null);
++        }
++        if (particles != null) {
++            particles.startConvergence(1600);
++        }
++        org.lineageos.setupwizard.util.OobeSpringHelper.playEntranceCascade(
++                particles, titleView, subtitleView, pillsView);
+         ViewCompat.setOnApplyWindowInsetsListener(mRootView, (view, windowInsets) -> {
+             final View linearLayout = findViewById(R.id.linear_layout);
+             final Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+diff --git a/src/org/lineageos/setupwizard/LocaleActivity.java b/src/org/lineageos/setupwizard/LocaleActivity.java
+index df180ba..f58cf64 100644
+--- a/src/org/lineageos/setupwizard/LocaleActivity.java
++++ b/src/org/lineageos/setupwizard/LocaleActivity.java
+@@ -92,7 +92,8 @@ public class LocaleActivity extends BaseSetupWizardActivity {
+         super.onResume();
+         mPaused = false;
+         registerReceiver(mSimChangedReceiver,
+-                new IntentFilter(TelephonyIntents.ACTION_SIM_STATE_CHANGED));
++                new IntentFilter(TelephonyIntents.ACTION_SIM_STATE_CHANGED),
++                Context.RECEIVER_EXPORTED);
+         if (mLanguagePicker != null) {
+             mLanguagePicker.setEnabled(true);
+         }
+diff --git a/src/org/lineageos/setupwizard/ThemeSettingsActivity.java b/src/org/lineageos/setupwizard/ThemeSettingsActivity.java
+index b261c9a..34fdce6 100644
+--- a/src/org/lineageos/setupwizard/ThemeSettingsActivity.java
++++ b/src/org/lineageos/setupwizard/ThemeSettingsActivity.java
+@@ -1,5 +1,6 @@
+ /*
+  * SPDX-FileCopyrightText: The LineageOS Project
++ * SPDX-FileCopyrightText: 2026 The BlazeAOSP Project
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+@@ -7,30 +8,207 @@ package org.lineageos.setupwizard;
+ 
+ import android.app.UiModeManager;
+ import android.content.res.Configuration;
++import android.graphics.Color;
++import android.graphics.drawable.GradientDrawable;
+ import android.os.Bundle;
++import android.provider.Settings;
++import android.view.View;
+ import android.widget.RadioGroup;
++import android.widget.TextView;
+ 
+ import androidx.annotation.Nullable;
+ 
++import com.android.settingslib.Utils;
++
++import org.lineageos.setupwizard.util.OobeSpringHelper;
++import org.lineageos.setupwizard.widget.OobeLivePreviewView;
++
++/**
++ * Flagship OOBE Visual Design, Liquid Glass & Dynamic Island Customization Studio.
++ */
+ public class ThemeSettingsActivity extends BaseSetupWizardActivity {
+ 
++    private static final String KEY_UI_GLASS_STYLE = "blaze_ui_glass_style";
++    private static final String KEY_GLASS_TAB_BARS = "blaze_glass_tab_bars";
++    private static final String KEY_ANIMATION_ENGINE = "blaze_animation_engine";
++    private static final String KEY_DYNAMIC_BAR_NOTIF_MODE = "dynamic_bar_notification_mode";
++
++    private OobeLivePreviewView mLivePreview;
++    private View mCardDark;
++    private View mCardLight;
++    private View mCardGlassIos27;
++    private View mCardGlassHybrid;
++    private View mCardGlassFrosted;
++    private View mCardIslandMessages;
++    private View mCardFloatingTabs;
++    private TextView mSummaryIslandMessages;
++    private TextView mSummaryFloatingTabs;
++
++    private boolean mIsDarkMode;
++    private int mGlassStyle = 3;
++    private boolean mIslandMessagesEnabled = true;
++    private boolean mFloatingTabsEnabled = true;
++
+     @Override
+     protected void onCreate(@Nullable Bundle savedInstanceState) {
+         super.onCreate(savedInstanceState);
+-        getGlifLayout().setDescriptionText(getString(R.string.theme_summary));
++        getGlifLayout().setDescriptionText(
++                "Living Flow 120Hz, iOS 27 Liquid Glass ve Dinamik Ada deneyimini özelleştirin.");
+ 
+         UiModeManager uiModeManager = getSystemService(UiModeManager.class);
++        mIsDarkMode = (getResources().getConfiguration().uiMode
++                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
++
++        mGlassStyle = Settings.Secure.getInt(
++                getContentResolver(), KEY_UI_GLASS_STYLE, 3);
++        mIslandMessagesEnabled = Settings.Secure.getInt(
++                getContentResolver(), KEY_DYNAMIC_BAR_NOTIF_MODE, 0) != 2;
++        mFloatingTabsEnabled = Settings.Secure.getInt(
++                getContentResolver(), KEY_GLASS_TAB_BARS, 1) == 1;
++
++        mLivePreview = findViewById(R.id.oobe_live_preview);
++        mCardDark = findViewById(R.id.card_theme_dark);
++        mCardLight = findViewById(R.id.card_theme_light);
++        mCardGlassIos27 = findViewById(R.id.card_glass_ios27);
++        mCardGlassHybrid = findViewById(R.id.card_glass_hybrid);
++        mCardGlassFrosted = findViewById(R.id.card_glass_frosted);
++        mCardIslandMessages = findViewById(R.id.card_toggle_island_messages);
++        mCardFloatingTabs = findViewById(R.id.card_toggle_floating_tabs);
++        mSummaryIslandMessages = findViewById(R.id.summary_island_messages);
++        mSummaryFloatingTabs = findViewById(R.id.summary_floating_tabs);
++
+         final RadioGroup radioGroup = findViewById(R.id.theme_radio_group);
+-        radioGroup.check(((getResources().getConfiguration().uiMode
+-                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES)
+-                ? R.id.radio_dark : R.id.radio_light);
+-        radioGroup.setOnCheckedChangeListener((group, checkedId) -> {
+-            if (checkedId == R.id.radio_dark) {
+-                uiModeManager.setNightModeActivated(true);
+-            } else if (checkedId == R.id.radio_light) {
+-                uiModeManager.setNightModeActivated(false);
+-            }
+-        });
++        if (radioGroup != null) {
++            radioGroup.check(mIsDarkMode ? R.id.radio_dark : R.id.radio_light);
++            radioGroup.setOnCheckedChangeListener((group, checkedId) -> {
++                if (checkedId == R.id.radio_dark) {
++                    uiModeManager.setNightModeActivated(true);
++                } else if (checkedId == R.id.radio_light) {
++                    uiModeManager.setNightModeActivated(false);
++                }
++            });
++        }
++
++        if (mCardDark != null) {
++            OobeSpringHelper.attachTouchSpring(mCardDark, 0.95f);
++            mCardDark.setOnClickListener(v -> {
++                mIsDarkMode = true;
++                refreshSelectionVisuals();
++                if (uiModeManager != null) {
++                    uiModeManager.setNightModeActivated(true);
++                }
++            });
++        }
++
++        if (mCardLight != null) {
++            OobeSpringHelper.attachTouchSpring(mCardLight, 0.95f);
++            mCardLight.setOnClickListener(v -> {
++                mIsDarkMode = false;
++                refreshSelectionVisuals();
++                if (uiModeManager != null) {
++                    uiModeManager.setNightModeActivated(false);
++                }
++            });
++        }
++
++        if (mCardGlassIos27 != null) {
++            OobeSpringHelper.attachTouchSpring(mCardGlassIos27, 0.96f);
++            mCardGlassIos27.setOnClickListener(v -> selectGlassStyle(3));
++        }
++        if (mCardGlassHybrid != null) {
++            OobeSpringHelper.attachTouchSpring(mCardGlassHybrid, 0.96f);
++            mCardGlassHybrid.setOnClickListener(v -> selectGlassStyle(0));
++        }
++        if (mCardGlassFrosted != null) {
++            OobeSpringHelper.attachTouchSpring(mCardGlassFrosted, 0.96f);
++            mCardGlassFrosted.setOnClickListener(v -> selectGlassStyle(1));
++        }
++
++        if (mCardIslandMessages != null) {
++            OobeSpringHelper.attachTouchSpring(mCardIslandMessages, 0.96f);
++            mCardIslandMessages.setOnClickListener(v -> {
++                mIslandMessagesEnabled = !mIslandMessagesEnabled;
++                Settings.Secure.putInt(getContentResolver(), KEY_DYNAMIC_BAR_NOTIF_MODE,
++                        mIslandMessagesEnabled ? 0 : 2);
++                if (mLivePreview != null) {
++                    mLivePreview.cycleIslandMode();
++                }
++                refreshSelectionVisuals();
++            });
++        }
++
++        if (mCardFloatingTabs != null) {
++            OobeSpringHelper.attachTouchSpring(mCardFloatingTabs, 0.96f);
++            mCardFloatingTabs.setOnClickListener(v -> {
++                mFloatingTabsEnabled = !mFloatingTabsEnabled;
++                Settings.Secure.putInt(getContentResolver(), KEY_GLASS_TAB_BARS,
++                        mFloatingTabsEnabled ? 1 : 0);
++                Settings.Secure.putInt(getContentResolver(), KEY_ANIMATION_ENGINE, 0);
++                refreshSelectionVisuals();
++            });
++        }
++
++        refreshSelectionVisuals();
++        OobeSpringHelper.playEntranceCascade(
++                mLivePreview, mCardDark, mCardLight,
++                mCardGlassIos27, mCardGlassHybrid, mCardGlassFrosted,
++                mCardIslandMessages, mCardFloatingTabs);
++    }
++
++    private void selectGlassStyle(int style) {
++        mGlassStyle = style;
++        Settings.Secure.putInt(getContentResolver(), KEY_UI_GLASS_STYLE, style);
++        refreshSelectionVisuals();
++    }
++
++    private void refreshSelectionVisuals() {
++        int accent = Utils.getColorAccentDefaultColor(this);
++        applyCardBackground(mCardDark, mIsDarkMode, accent);
++        applyCardBackground(mCardLight, !mIsDarkMode, accent);
++
++        applyCardBackground(mCardGlassIos27, mGlassStyle == 3, accent);
++        applyCardBackground(mCardGlassHybrid, mGlassStyle == 0, accent);
++        applyCardBackground(mCardGlassFrosted, mGlassStyle == 1, accent);
++
++        applyCardBackground(mCardIslandMessages, mIslandMessagesEnabled, accent);
++        applyCardBackground(mCardFloatingTabs, mFloatingTabsEnabled, accent);
++
++        if (mSummaryIslandMessages != null) {
++            mSummaryIslandMessages.setText(mIslandMessagesEnabled
++                    ? "Aktif • Gelen mesajlar ve sayaçlar Dinamik Ada'da açılır"
++                    : "Standart • Klasik Android bildirim balonları kullanılır");
++        }
++        if (mSummaryFloatingTabs != null) {
++            mSummaryFloatingTabs.setText(mFloatingTabsEnabled
++                    ? "Aktif • Yüzen Liquid Glass bar ve 120Hz Laminar Flow yay fiziği"
++                    : "Standart • Klasik alt sekme görünümü");
++        }
++        if (mLivePreview != null) {
++            mLivePreview.setPreviewConfig(mIsDarkMode, mGlassStyle, mFloatingTabsEnabled);
++        }
++    }
++
++    private void applyCardBackground(View view, boolean selected, int accentColor) {
++        if (view == null) return;
++        float density = getResources().getDisplayMetrics().density;
++        GradientDrawable gd = new GradientDrawable();
++        gd.setCornerRadius(18f * density);
++        if (selected) {
++            int fill = Color.argb(38, Color.red(accentColor),
++                    Color.green(accentColor), Color.blue(accentColor));
++            gd.setColor(fill);
++            gd.setStroke((int) (2.0f * density), accentColor);
++        } else {
++            int surfaceFill = mIsDarkMode
++                    ? Color.parseColor("#18FFFFFF")
++                    : Color.parseColor("#12000000");
++            int stroke = mIsDarkMode
++                    ? Color.parseColor("#2AFFFFFF")
++                    : Color.parseColor("#22000000");
++            gd.setColor(surfaceFill);
++            gd.setStroke((int) (1.0f * density), stroke);
++        }
++        view.setBackground(gd);
+     }
+ 
+     @Override
+diff --git a/src/org/lineageos/setupwizard/WelcomeActivity.java b/src/org/lineageos/setupwizard/WelcomeActivity.java
+index 0e2fa92..cabd0e7 100644
+--- a/src/org/lineageos/setupwizard/WelcomeActivity.java
++++ b/src/org/lineageos/setupwizard/WelcomeActivity.java
+@@ -43,14 +43,10 @@ public class WelcomeActivity extends SubBaseActivity {
+                 .setOnClickListener(
+                         view -> startSubactivity(new Intent(ACTION_ACCESSIBILITY_SETTINGS)));
+ 
+-        FooterButtonStyleUtils.applyPrimaryButtonPartnerResource(this, startButton, true);
+-
+         if (SetupWizardUtils.hasTelephony(this)) {
+             setSkipText(R.string.emergency_call);
+             emergButton.setOnClickListener(
+                     view -> startSubactivity(new Intent(ACTION_EMERGENCY_DIAL)));
+-
+-            FooterButtonStyleUtils.applySecondaryButtonPartnerResource(this, emergButton, true);
+         } else {
+             emergButton.setVisibility(View.GONE);
+         }
+@@ -69,12 +65,48 @@ public class WelcomeActivity extends SubBaseActivity {
+                 SetupWizardUtils.finishSetupWizard(WelcomeActivity.this);
+             });
+         }
++
++        // Initialize and choreograph ColorOS 17 opening animation suite
++        org.lineageos.setupwizard.widget.LuminousBloomView bloomView = findViewById(R.id.bloom_background);
++        org.lineageos.setupwizard.widget.PeekingMascotView mascotView = findViewById(R.id.peeking_mascot);
++        org.lineageos.setupwizard.widget.TouchRippleLayout touchLayout = findViewById(R.id.touch_ripple_layout);
++        org.lineageos.setupwizard.widget.TypewriterTextView typewriter = findViewById(R.id.typewriter_text);
++        org.lineageos.setupwizard.widget.ParticleConvergenceView particles = findViewById(R.id.particle_convergence);
++        View accessibilityButton = findViewById(R.id.launch_accessibility);
++
++        org.lineageos.setupwizard.util.OobeSpringHelper.attachTouchSpring(startButton, 0.94f);
++        org.lineageos.setupwizard.util.OobeSpringHelper.attachTouchSpring(emergButton, 0.95f);
++        org.lineageos.setupwizard.util.OobeSpringHelper.attachTouchSpring(accessibilityButton, 0.95f);
++        org.lineageos.setupwizard.util.OobeSpringHelper.attachTouchSpring(skipButton, 0.95f);
++        org.lineageos.setupwizard.util.OobeSpringHelper.playEntranceCascade(
++                typewriter, particles, startButton, emergButton, accessibilityButton);
++
++        if (touchLayout != null && mascotView != null) {
++            touchLayout.setMascotView(mascotView);
++        }
++
++        if (bloomView != null) {
++            bloomView.startBloomAnimation(2600, () -> {
++                if (typewriter != null) {
++                    typewriter.startTyping(() -> {
++                        if (particles != null) {
++                            particles.startConvergence(1800);
++                        }
++                    });
++                }
++            });
++        }
+     }
+ 
+     @Override
+     public void onBackPressed() {
+     }
+ 
++    @Override
++    protected com.google.android.setupdesign.GlifLayout getGlifLayout() {
++        return null;
++    }
++
+     @Override
+     protected int getLayoutResId() {
+         return R.layout.welcome_activity;
+diff --git a/src/org/lineageos/setupwizard/util/OobeSpringHelper.java b/src/org/lineageos/setupwizard/util/OobeSpringHelper.java
+new file mode 100644
+index 0000000..a987450
+--- /dev/null
++++ b/src/org/lineageos/setupwizard/util/OobeSpringHelper.java
+@@ -0,0 +1,91 @@
++/*
++ * SPDX-FileCopyrightText: 2026 The BlazeAOSP Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.lineageos.setupwizard.util;
++
++import android.animation.TimeInterpolator;
++import android.view.MotionEvent;
++import android.view.View;
++
++/**
++ * 120Hz ColorOS 17 Laminar Flow & iOS 27 Liquid Glass spring physics helper for OOBE.
++ * Uses analytical underdamped second-order spring interpolators on RenderThread.
++ */
++public final class OobeSpringHelper {
++
++    private OobeSpringHelper() {
++    }
++
++    /**
++     * Analytical underdamped/nearly-critically-damped spring interpolator:
++     *zeta = 0.78, omega0 = 18 rad/s -> silky ColorOS 17 tactile snap.
++     */
++    public static final TimeInterpolator LAMINAR_SPRING_INTERPOLATOR = input -> {
++        if (input <= 0f) return 0f;
++        if (input >= 1f) return 1f;
++        final double zeta = 0.78;
++        final double omega0 = 18.0;
++        final double omegaD = omega0 * Math.sqrt(1.0 - zeta * zeta);
++        final double env = Math.exp(-zeta * omega0 * input);
++        final double osc = Math.cos(omegaD * input)
++                + ((zeta * omega0) / omegaD) * Math.sin(omegaD * input);
++        return (float) (1.0 - env * osc);
++    };
++
++    /**
++     * Attaches 120Hz tactile press-scale spring physics to any interactive card or button.
++     */
++    public static void attachTouchSpring(View view, float pressedScale) {
++        if (view == null) return;
++        view.setOnTouchListener((v, event) -> {
++            switch (event.getActionMasked()) {
++                case MotionEvent.ACTION_DOWN:
++                    v.animate()
++                            .scaleX(pressedScale)
++                            .scaleY(pressedScale)
++                            .setDuration(150)
++                            .setInterpolator(LAMINAR_SPRING_INTERPOLATOR)
++                            .start();
++                    break;
++                case MotionEvent.ACTION_UP:
++                case MotionEvent.ACTION_CANCEL:
++                    v.animate()
++                            .scaleX(1.0f)
++                            .scaleY(1.0f)
++                            .setDuration(360)
++                            .setInterpolator(LAMINAR_SPRING_INTERPOLATOR)
++                            .start();
++                    break;
++            }
++            return false;
++        });
++    }
++
++    /**
++     * Plays a staggered ColorOS 17 / One UI 9 spatial entrance cascade across a list of views.
++     */
++    public static void playEntranceCascade(View... views) {
++        if (views == null) return;
++        float offsetPx = 42f;
++        for (int i = 0; i < views.length; i++) {
++            View v = views[i];
++            if (v == null || v.getVisibility() != View.VISIBLE) continue;
++            float density = v.getResources().getDisplayMetrics().density;
++            v.setAlpha(0f);
++            v.setTranslationY(offsetPx * density);
++            v.setScaleX(0.95f);
++            v.setScaleY(0.95f);
++            v.animate()
++                    .alpha(1f)
++                    .translationY(0f)
++                    .scaleX(1f)
++                    .scaleY(1f)
++                    .setStartDelay(55L * i)
++                    .setDuration(520)
++                    .setInterpolator(LAMINAR_SPRING_INTERPOLATOR)
++                    .start();
++        }
++    }
++}
+diff --git a/src/org/lineageos/setupwizard/widget/LuminousBloomView.java b/src/org/lineageos/setupwizard/widget/LuminousBloomView.java
+new file mode 100644
+index 0000000..de69548
+--- /dev/null
++++ b/src/org/lineageos/setupwizard/widget/LuminousBloomView.java
+@@ -0,0 +1,227 @@
++/*
++ * SPDX-FileCopyrightText: 2026 The BlazeAOSP Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.lineageos.setupwizard.widget;
++
++import android.animation.Animator;
++import android.animation.AnimatorListenerAdapter;
++import android.animation.ValueAnimator;
++import android.content.Context;
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.graphics.LinearGradient;
++import android.graphics.Paint;
++import android.graphics.Path;
++import android.graphics.RadialGradient;
++import android.graphics.Shader;
++import android.os.SystemClock;
++import android.util.AttributeSet;
++import android.view.View;
++import android.view.animation.DecelerateInterpolator;
++
++/**
++ * ColorOS 17 "Living Flow" + iOS 27 Liquid Glass OOBE atmospheric backdrop:
++ * Stage 1: Expands a multi-spectral luminous core from deep cosmos night.
++ * Stage 2: Continuously animates two intersecting 3D translucent glass ribbons
++ *          (Warm Amber-Gold petal + Iridescent Violet-Magenta petal) with Fresnel specular rims.
++ */
++public class LuminousBloomView extends View {
++
++    private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mPetalPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mRimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Path mAmberPath = new Path();
++    private final Path mAmberRimPath = new Path();
++    private final Path mVioletPath = new Path();
++    private final Path mVioletRimPath = new Path();
++
++    private float mProgress = 0f;
++    private float mWavePhase = 0f;
++    private long mLastFrameMs = 0L;
++    private boolean mDarkCosmosMode = true;
++    private ValueAnimator mAnimator;
++    private OnBloomCompleteListener mListener;
++
++    public interface OnBloomCompleteListener {
++        void onBloomComplete();
++    }
++
++    public LuminousBloomView(Context context) {
++        this(context, null);
++    }
++
++    public LuminousBloomView(Context context, AttributeSet attrs) {
++        this(context, attrs, 0);
++    }
++
++    public LuminousBloomView(Context context, AttributeSet attrs, int defStyleAttr) {
++        super(context, attrs, defStyleAttr);
++        init();
++    }
++
++    private void init() {
++        setWillNotDraw(false);
++        float d = getResources().getDisplayMetrics().density;
++        mRimPaint.setStyle(Paint.Style.STROKE);
++        mRimPaint.setStrokeWidth(2.0f * d);
++        mRimPaint.setStrokeCap(Paint.Cap.ROUND);
++    }
++
++    public void setDarkCosmosMode(boolean darkCosmosMode) {
++        mDarkCosmosMode = darkCosmosMode;
++        invalidate();
++    }
++
++    public void startBloomAnimation(long duration, OnBloomCompleteListener listener) {
++        mListener = listener;
++        if (mAnimator != null && mAnimator.isRunning()) {
++            mAnimator.cancel();
++        }
++        mAnimator = ValueAnimator.ofFloat(0f, 1f);
++        mAnimator.setDuration(duration);
++        mAnimator.setInterpolator(new DecelerateInterpolator(1.6f));
++        mAnimator.addUpdateListener(animation -> {
++            mProgress = (float) animation.getAnimatedValue();
++            invalidate();
++        });
++        mAnimator.addListener(new AnimatorListenerAdapter() {
++            @Override
++            public void onAnimationEnd(Animator animation) {
++                if (mListener != null) {
++                    mListener.onBloomComplete();
++                }
++            }
++        });
++        mAnimator.start();
++    }
++
++    @Override
++    protected void onDraw(Canvas canvas) {
++        super.onDraw(canvas);
++        final float w = getWidth();
++        final float h = getHeight();
++        if (w <= 0 || h <= 0) return;
++
++        long now = SystemClock.uptimeMillis();
++        if (mLastFrameMs == 0L) mLastFrameMs = now;
++        float dt = Math.min((now - mLastFrameMs) / 1000f, 0.05f);
++        mLastFrameMs = now;
++        mWavePhase += dt * 0.9f;
++
++        float wave1 = (float) Math.sin(mWavePhase);
++        float wave2 = (float) Math.cos(mWavePhase * 0.78f);
++        float wave3 = (float) Math.sin(mWavePhase * 0.55f + 1.1f);
++
++        // 1. Base Deep Cosmos Indigo / Pastel Sky
++        if (mDarkCosmosMode) {
++            mPaint.setShader(new LinearGradient(
++                    0f, 0f, 0f, h,
++                    new int[]{0xFF060919, 0xFF141A46, 0xFF101434, 0xFF060812},
++                    new float[]{0f, 0.36f, 0.74f, 1f},
++                    Shader.TileMode.CLAMP));
++        } else {
++            mPaint.setShader(new LinearGradient(
++                    0f, 0f, 0f, h,
++                    new int[]{0xFFFFF0F3, 0xFFFFF4F0, 0xFFFAF7F5},
++                    new float[]{0f, 0.5f, 1f},
++                    Shader.TileMode.CLAMP));
++        }
++        mPaint.setAlpha(255);
++        canvas.drawRect(0f, 0f, w, h, mPaint);
++
++        float reveal = mAnimator != null ? Math.min(1f, mProgress * 1.25f) : 1f;
++
++        // 2. Ambient Upper Indigo-Violet Halo
++        float auraCx = w * 0.50f + wave2 * (w * 0.04f);
++        float auraCy = h * 0.28f + wave1 * (h * 0.02f);
++        float auraRadius = Math.max(w, h) * (0.18f + 0.30f * reveal);
++        mPaint.setShader(new RadialGradient(
++                auraCx, auraCy, auraRadius,
++                new int[]{0x585E6BFF, 0x2C3B44B0, 0x00101432},
++                new float[]{0f, 0.55f, 1f},
++                Shader.TileMode.CLAMP));
++        canvas.drawCircle(auraCx, auraCy, auraRadius, mPaint);
++
++        // 3. Upper-Right Warm Amber-Gold-Coral 3D Glass Petal (ColorOS 17 Signature Ribbon)
++        float petalSlide = (1f - reveal) * h * 0.22f;
++        float ax0 = w * 1.12f;
++        float ay0 = h * (0.34f + 0.018f * wave1) + petalSlide;
++        float ac1x = w * (0.64f + 0.035f * wave2);
++        float ac1y = h * (0.41f + 0.022f * wave3) + petalSlide;
++        float ac2x = w * (0.14f + 0.025f * wave1);
++        float ac2y = h * (0.60f + 0.020f * wave2) + petalSlide;
++        float axMid = w * (0.10f + 0.020f * wave3);
++        float ayMid = h * (0.69f + 0.015f * wave1) + petalSlide;
++
++        mAmberPath.reset();
++        mAmberPath.moveTo(ax0, ay0);
++        mAmberPath.cubicTo(ac1x, ac1y, ac2x, ac2y, axMid, ayMid);
++        mAmberPath.cubicTo(
++                w * 0.32f, h * (0.78f + 0.018f * wave2) + petalSlide,
++                w * 0.78f, h * (0.72f + 0.015f * wave1) + petalSlide,
++                w * 1.15f, h * 0.60f + petalSlide);
++        mAmberPath.close();
++
++        mPetalPaint.setShader(new LinearGradient(
++                w * 0.95f, h * 0.36f,
++                w * 0.20f, h * 0.74f,
++                new int[]{0xEEFF6A1A, 0xE6FF9A3C, 0xC8FFD26E, 0x344B2468},
++                new float[]{0f, 0.38f, 0.74f, 1f},
++                Shader.TileMode.CLAMP));
++        mPetalPaint.setAlpha(Math.round(255 * reveal));
++        canvas.drawPath(mAmberPath, mPetalPaint);
++
++        mAmberRimPath.reset();
++        mAmberRimPath.moveTo(ax0, ay0);
++        mAmberRimPath.cubicTo(ac1x, ac1y, ac2x, ac2y, axMid, ayMid);
++        mRimPaint.setShader(new LinearGradient(
++                w * 0.95f, ay0, axMid, ayMid,
++                new int[]{0xD8FFF3D1, 0xA8FFD080, 0x00FFFFFF},
++                new float[]{0f, 0.65f, 1f},
++                Shader.TileMode.CLAMP));
++        mRimPaint.setAlpha(Math.round(255 * reveal));
++        canvas.drawPath(mAmberRimPath, mRimPaint);
++
++        // 4. Lower Foreground Iridescent Violet-Magenta-Peach Glass Petal
++        float vx0 = -w * 0.14f;
++        float vy0 = h * (0.77f + 0.016f * wave2) + petalSlide * 0.8f;
++        float vc1x = w * (0.08f + 0.025f * wave1);
++        float vc1y = h * (0.56f + 0.022f * wave3) + petalSlide * 0.8f;
++        float vc2x = w * (0.56f + 0.030f * wave2);
++        float vc2y = h * (0.58f - 0.018f * wave1) + petalSlide * 0.8f;
++        float vxEnd = w * 0.96f;
++        float vyEnd = h * (0.94f + 0.012f * wave3) + petalSlide * 0.8f;
++
++        mVioletPath.reset();
++        mVioletPath.moveTo(vx0, vy0);
++        mVioletPath.cubicTo(vc1x, vc1y, vc2x, vc2y, vxEnd, vyEnd);
++        mVioletPath.lineTo(w * 1.05f, h * 1.08f);
++        mVioletPath.lineTo(-w * 0.14f, h * 1.08f);
++        mVioletPath.close();
++
++        mPetalPaint.setShader(new LinearGradient(
++                w * 0.28f, h * 0.56f,
++                w * 0.68f, h * 0.98f,
++                new int[]{0xE6FFC49B, 0xD8D462FF, 0xC86B2CF5, 0x90181240},
++                new float[]{0f, 0.28f, 0.68f, 1f},
++                Shader.TileMode.CLAMP));
++        mPetalPaint.setAlpha(Math.round(255 * reveal));
++        canvas.drawPath(mVioletPath, mPetalPaint);
++
++        mVioletRimPath.reset();
++        mVioletRimPath.moveTo(vx0, vy0);
++        mVioletRimPath.cubicTo(vc1x, vc1y, vc2x, vc2y, vxEnd, vyEnd);
++        mRimPaint.setShader(new LinearGradient(
++                0f, h * 0.60f, w * 0.90f, h * 0.88f,
++                new int[]{0x50FFFFFF, 0xEEFFF0FF, 0xAA9C72FF, 0x00FFFFFF},
++                new float[]{0f, 0.35f, 0.75f, 1f},
++                Shader.TileMode.CLAMP));
++        canvas.drawPath(mVioletRimPath, mRimPaint);
++
++        if (isAttachedToWindow()) {
++            postInvalidateOnAnimation();
++        }
++    }
++}
+diff --git a/src/org/lineageos/setupwizard/widget/OobeLivePreviewView.java b/src/org/lineageos/setupwizard/widget/OobeLivePreviewView.java
+new file mode 100644
+index 0000000..4101367
+--- /dev/null
++++ b/src/org/lineageos/setupwizard/widget/OobeLivePreviewView.java
+@@ -0,0 +1,330 @@
++/*
++ * SPDX-FileCopyrightText: 2026 The BlazeAOSP Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.lineageos.setupwizard.widget;
++
++import android.animation.ValueAnimator;
++import android.content.Context;
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.graphics.LinearGradient;
++import android.graphics.Paint;
++import android.graphics.RectF;
++import android.graphics.Shader;
++import android.graphics.Typeface;
++import android.util.AttributeSet;
++import android.view.MotionEvent;
++import android.view.View;
++
++import org.lineageos.setupwizard.util.OobeSpringHelper;
++
++/**
++ * Interactive 120Hz Live Preview Stage for the Flagship OOBE Visual Studio.
++ * Renders a miniature ColorOS 17 + iOS 27 + One UI 9 device canvas showing:
++ * - Living Flow 3D glass ribbon wallpaper (Dark Cosmos or Light Pearl)
++ * - Morphing Dynamic Island (Music Waveform / 04:59 Timer / Incoming Message)
++ * - One UI 9 Spatial Bento Cards
++ * - iOS 27 Liquid Glass Bottom Tab Bar with Active Lens Pill
++ */
++public class OobeLivePreviewView extends View {
++
++    private final Paint mOuterBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mOuterBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mOrbWarmPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mOrbVioletPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mIslandPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mIslandStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mCardPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mCardStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mTabBarPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mTabBarStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mLensPillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mAccentPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mTextTitlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mTextSubPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++
++    private final RectF mStageRect = new RectF();
++    private final RectF mIslandRect = new RectF();
++    private final RectF mCardLeftRect = new RectF();
++    private final RectF mCardRightRect = new RectF();
++    private final RectF mTabBarRect = new RectF();
++    private final RectF mLensRect = new RectF();
++
++    private boolean mIsDarkMode = true;
++    private int mGlassStyle = 3; // 3 = iOS 27 Smoked Crystal, 0 = Hybrid, 1 = Frosted, 2 = M3
++    private int mIslandMode = 0; // 0 = Mesaj, 1 = Zamanlayıcı, 2 = Müzik
++    private boolean mFloatingTabBar = true;
++
++    private float mPhase = 0f;
++    private float mIslandMorph = 1f;
++    private ValueAnimator mLoopAnimator;
++    private ValueAnimator mMorphAnimator;
++
++    public OobeLivePreviewView(Context context) {
++        this(context, null);
++    }
++
++    public OobeLivePreviewView(Context context, AttributeSet attrs) {
++        this(context, attrs, 0);
++    }
++
++    public OobeLivePreviewView(Context context, AttributeSet attrs, int defStyleAttr) {
++        super(context, attrs, defStyleAttr);
++        init();
++    }
++
++    private void init() {
++        mOuterBorderPaint.setStyle(Paint.Style.STROKE);
++        mOuterBorderPaint.setStrokeWidth(dpToPx(1.4f));
++
++        mIslandPaint.setColor(Color.parseColor("#EE060810"));
++        mIslandPaint.setStyle(Paint.Style.FILL);
++
++        mIslandStrokePaint.setColor(Color.parseColor("#55FFFFFF"));
++        mIslandStrokePaint.setStyle(Paint.Style.STROKE);
++        mIslandStrokePaint.setStrokeWidth(dpToPx(1f));
++
++        mCardPaint.setStyle(Paint.Style.FILL);
++        mCardStrokePaint.setStyle(Paint.Style.STROKE);
++        mCardStrokePaint.setStrokeWidth(dpToPx(1f));
++
++        mTabBarPaint.setStyle(Paint.Style.FILL);
++        mTabBarStrokePaint.setStyle(Paint.Style.STROKE);
++        mTabBarStrokePaint.setStrokeWidth(dpToPx(1.1f));
++
++        mLensPillPaint.setStyle(Paint.Style.FILL);
++        mAccentPaint.setStyle(Paint.Style.FILL);
++
++        mTextTitlePaint.setColor(Color.WHITE);
++        mTextTitlePaint.setTextSize(spToPx(12f));
++        mTextTitlePaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
++
++        mTextSubPaint.setColor(Color.parseColor("#CCE6F0FF"));
++        mTextSubPaint.setTextSize(spToPx(10.5f));
++        mTextSubPaint.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
++    }
++
++    public void setPreviewConfig(boolean isDarkMode, int glassStyle, boolean floatingTabBar) {
++        mIsDarkMode = isDarkMode;
++        mGlassStyle = glassStyle;
++        mFloatingTabBar = floatingTabBar;
++        updateShaders(getWidth(), getHeight());
++        invalidate();
++    }
++
++    public void cycleIslandMode() {
++        mIslandMode = (mIslandMode + 1) % 3;
++        if (mMorphAnimator != null) mMorphAnimator.cancel();
++        mMorphAnimator = ValueAnimator.ofFloat(0.78f, 1f);
++        mMorphAnimator.setDuration(420);
++        mMorphAnimator.setInterpolator(OobeSpringHelper.LAMINAR_SPRING_INTERPOLATOR);
++        mMorphAnimator.addUpdateListener(anim -> {
++            mIslandMorph = (float) anim.getAnimatedValue();
++            invalidate();
++        });
++        mMorphAnimator.start();
++    }
++
++    @Override
++    public boolean onTouchEvent(MotionEvent event) {
++        if (event.getActionMasked() == MotionEvent.ACTION_UP) {
++            cycleIslandMode();
++            performClick();
++            return true;
++        }
++        return true;
++    }
++
++    @Override
++    public boolean performClick() {
++        return super.performClick();
++    }
++
++    @Override
++    protected void onAttachedToWindow() {
++        super.onAttachedToWindow();
++        mLoopAnimator = ValueAnimator.ofFloat(0f, (float) (Math.PI * 2.0));
++        mLoopAnimator.setDuration(7500);
++        mLoopAnimator.setRepeatCount(ValueAnimator.INFINITE);
++        mLoopAnimator.setInterpolator(null);
++        mLoopAnimator.addUpdateListener(anim -> {
++            mPhase = (float) anim.getAnimatedValue();
++            invalidate();
++        });
++        mLoopAnimator.start();
++    }
++
++    @Override
++    protected void onDetachedFromWindow() {
++        super.onDetachedFromWindow();
++        if (mLoopAnimator != null) mLoopAnimator.cancel();
++        if (mMorphAnimator != null) mMorphAnimator.cancel();
++    }
++
++    @Override
++    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
++        super.onSizeChanged(w, h, oldw, oldh);
++        updateShaders(w, h);
++    }
++
++    private void updateShaders(int w, int h) {
++        if (w <= 0 || h <= 0) return;
++        int[] bgColors = mIsDarkMode
++                ? new int[]{Color.parseColor("#0D1024"), Color.parseColor("#1D1942"), Color.parseColor("#121029")}
++                : new int[]{Color.parseColor("#1E2852"), Color.parseColor("#352E6E"), Color.parseColor("#24204A")};
++        mOuterBgPaint.setShader(new LinearGradient(
++                0f, 0f, w, h, bgColors, new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
++        mOuterBorderPaint.setColor(Color.parseColor(mIsDarkMode ? "#40FFFFFF" : "#66FFFFFF"));
++
++        mOrbWarmPaint.setShader(new LinearGradient(
++                0f, h * 0.2f, w * 0.8f, h,
++                new int[]{Color.parseColor("#CCFF9E44"), Color.parseColor("#88FF5722"), Color.TRANSPARENT},
++                new float[]{0f, 0.55f, 1f},
++                Shader.TileMode.CLAMP
++        ));
++        mOrbVioletPaint.setShader(new LinearGradient(
++                w * 0.2f, h * 0.35f, w, h,
++                new int[]{Color.parseColor("#BBBA68C8"), Color.parseColor("#775E35B1"), Color.TRANSPARENT},
++                new float[]{0f, 0.6f, 1f},
++                Shader.TileMode.CLAMP
++        ));
++    }
++
++    @Override
++    protected void onDraw(Canvas canvas) {
++        super.onDraw(canvas);
++        final float w = getWidth();
++        final float h = getHeight();
++        if (w <= 0 || h <= 0) return;
++
++        float pad = dpToPx(2f);
++        float stageRadius = dpToPx(26f);
++        mStageRect.set(pad, pad, w - pad, h - pad);
++        canvas.drawRoundRect(mStageRect, stageRadius, stageRadius, mOuterBgPaint);
++
++        // Living Flow Ambient Ribbons inside stage
++        float driftX = (float) Math.sin(mPhase) * dpToPx(12f);
++        float driftY = (float) Math.cos(mPhase) * dpToPx(8f);
++        canvas.drawCircle(w * 0.72f + driftX, h * 0.42f + driftY, dpToPx(68f), mOrbWarmPaint);
++        canvas.drawCircle(w * 0.32f - driftX, h * 0.68f - driftY, dpToPx(64f), mOrbVioletPaint);
++
++        // 1. Interactive Dynamic Island at Top
++        float islandW = dpToPx(mIslandMode == 0 ? 226f : (mIslandMode == 1 ? 186f : 198f)) * mIslandMorph;
++        float islandH = dpToPx(34f) * (0.9f + 0.1f * mIslandMorph);
++        float islandTop = dpToPx(12f);
++        mIslandRect.set(
++                w / 2f - islandW / 2f,
++                islandTop,
++                w / 2f + islandW / 2f,
++                islandTop + islandH
++        );
++        canvas.drawRoundRect(mIslandRect, islandH / 2f, islandH / 2f, mIslandPaint);
++        canvas.drawRoundRect(mIslandRect, islandH / 2f, islandH / 2f, mIslandStrokePaint);
++
++        float dotCx = mIslandRect.left + dpToPx(17f);
++        float dotCy = mIslandRect.centerY();
++        if (mIslandMode == 0) {
++            mAccentPaint.setColor(Color.parseColor("#25D366"));
++            canvas.drawCircle(dotCx, dotCy, dpToPx(6f), mAccentPaint);
++            canvas.drawText("Mesaj • Dokun & Değiştir", mIslandRect.left + dpToPx(30f),
++                    dotCy + spToPx(4f), mTextTitlePaint);
++        } else if (mIslandMode == 1) {
++            mAccentPaint.setColor(Color.parseColor("#FF9E44"));
++            canvas.drawCircle(dotCx, dotCy, dpToPx(6f), mAccentPaint);
++            canvas.drawText("Zamanlayıcı • 04:59", mIslandRect.left + dpToPx(30f),
++                    dotCy + spToPx(4f), mTextTitlePaint);
++        } else {
++            mAccentPaint.setColor(Color.parseColor("#D8B4FE"));
++            canvas.drawCircle(dotCx, dotCy, dpToPx(6f), mAccentPaint);
++            canvas.drawText("Living Flow • 120Hz", mIslandRect.left + dpToPx(30f),
++                    dotCy + spToPx(4f), mTextTitlePaint);
++        }
++
++        // 2. Middle Spatial Bento Cards (One UI 9 + ColorOS 17)
++        mCardPaint.setColor(Color.parseColor(mIsDarkMode ? "#26FFFFFF" : "#38FFFFFF"));
++        mCardStrokePaint.setColor(Color.parseColor("#42FFFFFF"));
++        float cardTop = islandTop + islandH + dpToPx(12f);
++        float cardBottom = h - dpToPx(58f);
++        float midGap = dpToPx(10f);
++        float sideMargin = dpToPx(16f);
++        float cardW = (w - sideMargin * 2f - midGap) / 2f;
++
++        mCardLeftRect.set(sideMargin, cardTop, sideMargin + cardW, cardBottom);
++        mCardRightRect.set(sideMargin + cardW + midGap, cardTop, w - sideMargin, cardBottom);
++        canvas.drawRoundRect(mCardLeftRect, dpToPx(18f), dpToPx(18f), mCardPaint);
++        canvas.drawRoundRect(mCardLeftRect, dpToPx(18f), dpToPx(18f), mCardStrokePaint);
++        canvas.drawRoundRect(mCardRightRect, dpToPx(18f), dpToPx(18f), mCardPaint);
++        canvas.drawRoundRect(mCardRightRect, dpToPx(18f), dpToPx(18f), mCardStrokePaint);
++
++        canvas.drawText("Laminar Flow", mCardLeftRect.left + dpToPx(12f),
++                mCardLeftRect.top + dpToPx(22f), mTextTitlePaint);
++        canvas.drawText("120Hz Yay Fiziği", mCardLeftRect.left + dpToPx(12f),
++                mCardLeftRect.top + dpToPx(38f), mTextSubPaint);
++
++        canvas.drawText("Liquid Glass", mCardRightRect.left + dpToPx(12f),
++                mCardRightRect.top + dpToPx(22f), mTextTitlePaint);
++        String styleLabel = mGlassStyle == 3 ? "iOS 27 Koyu Kristal"
++                : (mGlassStyle == 0 ? "ColorOS + iOS Hibrit"
++                : (mGlassStyle == 1 ? "ColorOS Buzlu Cam" : "Stok Material 3"));
++        canvas.drawText(styleLabel, mCardRightRect.left + dpToPx(12f),
++                mCardRightRect.top + dpToPx(38f), mTextSubPaint);
++
++        // 3. Bottom iOS 27 Liquid Glass Tab Bar with Active Lens Pill
++        float barH = dpToPx(36f);
++        float barBottom = h - dpToPx(11f);
++        float barSide = mFloatingTabBar ? dpToPx(28f) : dpToPx(12f);
++        mTabBarRect.set(barSide, barBottom - barH, w - barSide, barBottom);
++
++        if (mGlassStyle == 3) {
++            mTabBarPaint.setColor(Color.parseColor("#CC0A0D18"));
++            mTabBarStrokePaint.setColor(Color.parseColor("#66FFFFFF"));
++            mLensPillPaint.setColor(Color.parseColor("#445E9EFF"));
++        } else if (mGlassStyle == 0) {
++            mTabBarPaint.setColor(Color.parseColor("#4218223C"));
++            mTabBarStrokePaint.setColor(Color.parseColor("#75FFFFFF"));
++            mLensPillPaint.setColor(Color.parseColor("#48FF9E44"));
++        } else if (mGlassStyle == 1) {
++            mTabBarPaint.setColor(Color.parseColor("#551E2436"));
++            mTabBarStrokePaint.setColor(Color.parseColor("#40FFFFFF"));
++            mLensPillPaint.setColor(Color.parseColor("#38FFFFFF"));
++        } else {
++            mTabBarPaint.setColor(Color.parseColor("#DD1F222A"));
++            mTabBarStrokePaint.setColor(Color.parseColor("#22FFFFFF"));
++            mLensPillPaint.setColor(Color.parseColor("#33A8C7FA"));
++        }
++
++        float barCorner = mFloatingTabBar ? barH / 2f : dpToPx(12f);
++        canvas.drawRoundRect(mTabBarRect, barCorner, barCorner, mTabBarPaint);
++        canvas.drawRoundRect(mTabBarRect, barCorner, barCorner, mTabBarStrokePaint);
++
++        // Animated sliding active lens capsule inside the Liquid Glass Tab Bar
++        float lensW = dpToPx(88f);
++        float lensPad = dpToPx(4f);
++        float slideFactor = 0.5f + 0.38f * (float) Math.sin(mPhase * 0.7f);
++        float minLeft = mTabBarRect.left + lensPad;
++        float maxLeft = mTabBarRect.right - lensPad - lensW;
++        float lensLeft = minLeft + (maxLeft - minLeft) * slideFactor;
++        mLensRect.set(lensLeft, mTabBarRect.top + lensPad, lensLeft + lensW, mTabBarRect.bottom - lensPad);
++        canvas.drawRoundRect(mLensRect, (barH - lensPad * 2f) / 2f, (barH - lensPad * 2f) / 2f, mLensPillPaint);
++
++        canvas.drawText("Ana Ekran", mTabBarRect.left + dpToPx(18f),
++                mTabBarRect.centerY() + spToPx(3.8f), mTextSubPaint);
++        canvas.drawText("BlazeHouse", mTabBarRect.centerX() - dpToPx(30f),
++                mTabBarRect.centerY() + spToPx(3.8f), mTextTitlePaint);
++        canvas.drawText("Ayarlar", mTabBarRect.right - dpToPx(56f),
++                mTabBarRect.centerY() + spToPx(3.8f), mTextSubPaint);
++
++        // Outer border
++        canvas.drawRoundRect(mStageRect, stageRadius, stageRadius, mOuterBorderPaint);
++    }
++
++    private float dpToPx(float dp) {
++        return dp * getResources().getDisplayMetrics().density;
++    }
++
++    private float spToPx(float sp) {
++        return sp * getResources().getDisplayMetrics().scaledDensity;
++    }
++}
+diff --git a/src/org/lineageos/setupwizard/widget/ParticleConvergenceView.java b/src/org/lineageos/setupwizard/widget/ParticleConvergenceView.java
+new file mode 100644
+index 0000000..0ea4599
+--- /dev/null
++++ b/src/org/lineageos/setupwizard/widget/ParticleConvergenceView.java
+@@ -0,0 +1,248 @@
++/*
++ * SPDX-FileCopyrightText: 2026 The BlazeAOSP Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.lineageos.setupwizard.widget;
++
++import android.animation.ValueAnimator;
++import android.content.Context;
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.graphics.LinearGradient;
++import android.graphics.Paint;
++import android.graphics.RectF;
++import android.graphics.Shader;
++import android.graphics.Typeface;
++import android.util.AttributeSet;
++import android.view.View;
++import android.view.animation.OvershootInterpolator;
++
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Random;
++
++/**
++ * ColorOS 17 / iOS 27 Flagship OOBE Centerpiece:
++ * Luminous constellation particle convergence + Floating Liquid Glass "17" Emblem Core
++ * with 120Hz continuous orbital breathing.
++ */
++public class ParticleConvergenceView extends View {
++
++    private static class Node {
++        final float startAngle;
++        final float startDist;
++        final float targetAngle;
++        final float targetDist;
++        final float radius;
++        final int color;
++
++        Node(float sAngle, float sDist, float tAngle, float tDist, float rad, int color) {
++            this.startAngle = sAngle;
++            this.startDist = sDist;
++            this.targetAngle = tAngle;
++            this.targetDist = tDist;
++            this.radius = rad;
++            this.color = color;
++        }
++    }
++
++    private final Paint mNodePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mLinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mCardBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mCardBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mNumberPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mLabelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final RectF mCoreRect = new RectF();
++
++    private final List<Node> mNodes = new ArrayList<>();
++    private float mProgress = 0.25f;
++    private float mOrbitPhase = 0f;
++    private ValueAnimator mAnimator;
++    private ValueAnimator mOrbitAnimator;
++
++    public ParticleConvergenceView(Context context) {
++        this(context, null);
++    }
++
++    public ParticleConvergenceView(Context context, AttributeSet attrs) {
++        this(context, attrs, 0);
++    }
++
++    public ParticleConvergenceView(Context context, AttributeSet attrs, int defStyleAttr) {
++        super(context, attrs, defStyleAttr);
++        init();
++    }
++
++    private void init() {
++        mNodePaint.setStyle(Paint.Style.FILL);
++
++        mLinePaint.setColor(Color.parseColor("#88FFE0B2"));
++        mLinePaint.setStyle(Paint.Style.STROKE);
++        mLinePaint.setStrokeWidth(dpToPx(1.1f));
++
++        mCardBgPaint.setColor(Color.parseColor("#2812162A"));
++        mCardBgPaint.setStyle(Paint.Style.FILL);
++
++        mCardBorderPaint.setColor(Color.parseColor("#55FFFFFF"));
++        mCardBorderPaint.setStyle(Paint.Style.STROKE);
++        mCardBorderPaint.setStrokeWidth(dpToPx(1.3f));
++
++        mNumberPaint.setColor(Color.WHITE);
++        mNumberPaint.setTextSize(spToPx(64f));
++        mNumberPaint.setTextAlign(Paint.Align.CENTER);
++        mNumberPaint.setTypeface(Typeface.create("sans-serif-light", Typeface.BOLD));
++        mNumberPaint.setShadowLayer(dpToPx(18f), 0f, dpToPx(4f), Color.parseColor("#77FF8C3B"));
++
++        mLabelPaint.setColor(Color.parseColor("#E6F0FF"));
++        mLabelPaint.setTextSize(spToPx(13f));
++        mLabelPaint.setTextAlign(Paint.Align.CENTER);
++        mLabelPaint.setLetterSpacing(0.14f);
++        mLabelPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
++
++        int[] palette = new int[]{
++                Color.parseColor("#FFB347"),
++                Color.parseColor("#FF7A59"),
++                Color.parseColor("#D8B4FE"),
++                Color.parseColor("#70E1FF"),
++                Color.parseColor("#FFF3E0")
++        };
++
++        Random rnd = new Random(1337);
++        for (int i = 0; i < 20; i++) {
++            float sAngle = (float) (i * (2 * Math.PI / 20.0)) + (rnd.nextFloat() - 0.5f) * 0.25f;
++            float sDist = dpToPx(135 + rnd.nextFloat() * 75);
++
++            float tAngle = sAngle + 0.45f;
++            float tDist = dpToPx(76 + (i % 3) * 18);
++
++            float radius = dpToPx(2.8f + (i % 4) * 1.1f);
++            mNodes.add(new Node(sAngle, sDist, tAngle, tDist, radius, palette[i % palette.length]));
++        }
++    }
++
++    @Override
++    protected void onAttachedToWindow() {
++        super.onAttachedToWindow();
++        startOrbitLoop();
++        // Start gentle convergence automatically so even before typewriter finishes it looks alive
++        startConvergence(2200);
++    }
++
++    @Override
++    protected void onDetachedFromWindow() {
++        super.onDetachedFromWindow();
++        if (mAnimator != null) mAnimator.cancel();
++        if (mOrbitAnimator != null) mOrbitAnimator.cancel();
++    }
++
++    private void startOrbitLoop() {
++        if (mOrbitAnimator != null && mOrbitAnimator.isRunning()) return;
++        mOrbitAnimator = ValueAnimator.ofFloat(0f, (float) (Math.PI * 2.0));
++        mOrbitAnimator.setDuration(10000);
++        mOrbitAnimator.setRepeatCount(ValueAnimator.INFINITE);
++        mOrbitAnimator.setInterpolator(null);
++        mOrbitAnimator.addUpdateListener(anim -> {
++            mOrbitPhase = (float) anim.getAnimatedValue();
++            invalidate();
++        });
++        mOrbitAnimator.start();
++    }
++
++    public void startConvergence(long duration) {
++        if (mAnimator != null && mAnimator.isRunning()) {
++            mAnimator.cancel();
++        }
++        mAnimator = ValueAnimator.ofFloat(0.15f, 1f);
++        mAnimator.setDuration(duration);
++        mAnimator.setInterpolator(new OvershootInterpolator(0.95f));
++        mAnimator.addUpdateListener(animation -> {
++            mProgress = (float) animation.getAnimatedValue();
++            invalidate();
++        });
++        mAnimator.start();
++    }
++
++    @Override
++    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
++        super.onSizeChanged(w, h, oldw, oldh);
++        if (w > 0 && h > 0) {
++            LinearGradient numGrad = new LinearGradient(
++                    0f, h * 0.3f, 0f, h * 0.65f,
++                    new int[]{Color.WHITE, Color.parseColor("#FFE4B5"), Color.parseColor("#D8B4FE")},
++                    new float[]{0f, 0.58f, 1f},
++                    Shader.TileMode.CLAMP
++            );
++            mNumberPaint.setShader(numGrad);
++        }
++    }
++
++    @Override
++    protected void onDraw(Canvas canvas) {
++        super.onDraw(canvas);
++        final float width = getWidth();
++        final float height = getHeight();
++        if (width <= 0 || height <= 0) return;
++
++        final float centerX = width / 2f;
++        final float centerY = height / 2f + (float) Math.sin(mOrbitPhase) * dpToPx(5f);
++        final float t = mProgress;
++
++        float[] currentX = new float[mNodes.size()];
++        float[] currentY = new float[mNodes.size()];
++
++        for (int i = 0; i < mNodes.size(); i++) {
++            Node n = mNodes.get(i);
++            float angle = n.startAngle + (n.targetAngle - n.startAngle) * t + mOrbitPhase * 0.35f;
++            float dist = n.startDist + (n.targetDist - n.startDist) * t;
++            currentX[i] = centerX + (float) Math.cos(angle) * dist;
++            currentY[i] = centerY + (float) Math.sin(angle) * dist;
++        }
++
++        // Draw luminous constellation filaments
++        float maxLineDist = dpToPx(82f);
++        for (int i = 0; i < mNodes.size(); i++) {
++            for (int j = i + 1; j < mNodes.size(); j++) {
++                float dx = currentX[i] - currentX[j];
++                float dy = currentY[i] - currentY[j];
++                float dist = (float) Math.hypot(dx, dy);
++                if (dist < maxLineDist) {
++                    int alpha = (int) (255 * (1f - dist / maxLineDist) * 0.34f * Math.min(1f, t));
++                    mLinePaint.setAlpha(Math.max(0, Math.min(255, alpha)));
++                    canvas.drawLine(currentX[i], currentY[i], currentX[j], currentY[j], mLinePaint);
++                }
++            }
++        }
++
++        // Draw orbital nodes
++        for (int i = 0; i < mNodes.size(); i++) {
++            Node n = mNodes.get(i);
++            mNodePaint.setColor(n.color);
++            mNodePaint.setAlpha((int) (220 * Math.min(1f, 0.4f + 0.6f * t)));
++            canvas.drawCircle(currentX[i], currentY[i], n.radius * (0.7f + 0.3f * t), mNodePaint);
++        }
++
++        // Draw central Liquid Glass "17 / LIVING FLOW" emblem card
++        float cardSize = dpToPx(148f) * (0.85f + 0.15f * t);
++        float radius = dpToPx(38f);
++        mCoreRect.set(
++                centerX - cardSize / 2f,
++                centerY - cardSize / 2f,
++                centerX + cardSize / 2f,
++                centerY + cardSize / 2f
++        );
++        canvas.drawRoundRect(mCoreRect, radius, radius, mCardBgPaint);
++        canvas.drawRoundRect(mCoreRect, radius, radius, mCardBorderPaint);
++
++        canvas.drawText("17", centerX, centerY + dpToPx(12f), mNumberPaint);
++        canvas.drawText("LIVING FLOW", centerX, centerY + dpToPx(38f), mLabelPaint);
++    }
++
++    private float dpToPx(float dp) {
++        return dp * getResources().getDisplayMetrics().density;
++    }
++
++    private float spToPx(float sp) {
++        return sp * getResources().getDisplayMetrics().scaledDensity;
++    }
++}
+diff --git a/src/org/lineageos/setupwizard/widget/PeekingMascotView.java b/src/org/lineageos/setupwizard/widget/PeekingMascotView.java
+new file mode 100644
+index 0000000..27a5574
+--- /dev/null
++++ b/src/org/lineageos/setupwizard/widget/PeekingMascotView.java
+@@ -0,0 +1,212 @@
++/*
++ * SPDX-FileCopyrightText: 2026 The BlazeAOSP Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.lineageos.setupwizard.widget;
++
++import android.animation.ValueAnimator;
++import android.content.Context;
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.graphics.Paint;
++import android.graphics.RectF;
++import android.os.Handler;
++import android.os.Looper;
++import android.util.AttributeSet;
++import android.view.View;
++import android.view.animation.OvershootInterpolator;
++
++import java.util.Random;
++
++/**
++ * Dynamic Island Capsule + Cute Mascot (BlazeBuddy) peeking down from the top island.
++ * Supports spontaneous blinking, reactive gaze tracking, and iOS 27 / ColorOS 17 island rim.
++ */
++public class PeekingMascotView extends View {
++
++    private final Paint mIslandBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mIslandBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mEyePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mShinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final RectF mIslandRect = new RectF();
++    private final RectF mLeftEyeRect = new RectF();
++    private final RectF mRightEyeRect = new RectF();
++
++    private float mBlinkScaleY = 1.0f;
++    private float mGazeOffsetX = 0f;
++    private float mGazeOffsetY = 0f;
++
++    private final Handler mHandler = new Handler(Looper.getMainLooper());
++    private final Random mRandom = new Random();
++    private boolean mIsActive = false;
++
++    private final Runnable mBlinkRunnable = new Runnable() {
++        @Override
++        public void run() {
++            if (!mIsActive) return;
++            triggerBlink();
++            long nextDelay = 2400 + mRandom.nextInt(3200);
++            mHandler.postDelayed(this, nextDelay);
++        }
++    };
++
++    public PeekingMascotView(Context context) {
++        this(context, null);
++    }
++
++    public PeekingMascotView(Context context, AttributeSet attrs) {
++        this(context, attrs, 0);
++    }
++
++    public PeekingMascotView(Context context, AttributeSet attrs, int defStyleAttr) {
++        super(context, attrs, defStyleAttr);
++        init();
++    }
++
++    private void init() {
++        mIslandBgPaint.setColor(Color.parseColor("#D8090B14"));
++        mIslandBgPaint.setStyle(Paint.Style.FILL);
++
++        mIslandBorderPaint.setColor(Color.parseColor("#45FFFFFF"));
++        mIslandBorderPaint.setStyle(Paint.Style.STROKE);
++        mIslandBorderPaint.setStrokeWidth(dpToPx(1.1f));
++
++        mEyePaint.setColor(Color.parseColor("#70E1FF"));
++        mEyePaint.setStyle(Paint.Style.FILL);
++
++        mShinePaint.setColor(Color.WHITE);
++        mShinePaint.setStyle(Paint.Style.FILL);
++    }
++
++    public void startMascot() {
++        mIsActive = true;
++        mHandler.postDelayed(mBlinkRunnable, 1100);
++    }
++
++    public void stopMascot() {
++        mIsActive = false;
++        mHandler.removeCallbacks(mBlinkRunnable);
++    }
++
++    @Override
++    protected void onAttachedToWindow() {
++        super.onAttachedToWindow();
++        startMascot();
++    }
++
++    @Override
++    protected void onDetachedFromWindow() {
++        super.onDetachedFromWindow();
++        stopMascot();
++    }
++
++    private void triggerBlink() {
++        ValueAnimator closeAnim = ValueAnimator.ofFloat(1.0f, 0.08f);
++        closeAnim.setDuration(85);
++        closeAnim.addUpdateListener(anim -> {
++            mBlinkScaleY = (float) anim.getAnimatedValue();
++            invalidate();
++        });
++        closeAnim.start();
++
++        mHandler.postDelayed(() -> {
++            ValueAnimator openAnim = ValueAnimator.ofFloat(0.08f, 1.0f);
++            openAnim.setDuration(155);
++            openAnim.setInterpolator(new OvershootInterpolator(1.8f));
++            openAnim.addUpdateListener(anim -> {
++                mBlinkScaleY = (float) anim.getAnimatedValue();
++                invalidate();
++            });
++            openAnim.start();
++        }, 100);
++    }
++
++    public void setGaze(float touchX, float touchY) {
++        int[] loc = new int[2];
++        getLocationOnScreen(loc);
++        float selfCenterX = loc[0] + getWidth() / 2f;
++        float selfCenterY = loc[1] + getHeight() / 2f;
++
++        float deltaX = touchX - selfCenterX;
++        float deltaY = touchY - selfCenterY;
++        float dist = (float) Math.hypot(deltaX, deltaY);
++
++        if (dist > 0) {
++            float maxOffset = dpToPx(3.5f);
++            mGazeOffsetX = Math.max(-maxOffset, Math.min(maxOffset, (deltaX / dist) * maxOffset));
++            mGazeOffsetY = Math.max(-maxOffset, Math.min(maxOffset, (deltaY / dist) * maxOffset));
++            invalidate();
++        }
++    }
++
++    public void resetGaze() {
++        mGazeOffsetX = 0f;
++        mGazeOffsetY = 0f;
++        invalidate();
++    }
++
++    @Override
++    protected void onDraw(Canvas canvas) {
++        super.onDraw(canvas);
++        final float width = getWidth();
++        final float height = getHeight();
++        if (width <= 0 || height <= 0) return;
++
++        final float centerY = height / 2f;
++        final float pillW = dpToPx(92f);
++        final float pillH = dpToPx(28f);
++        mIslandRect.set(
++                width / 2f - pillW / 2f,
++                centerY - pillH / 2f,
++                width / 2f + pillW / 2f,
++                centerY + pillH / 2f
++        );
++        canvas.drawRoundRect(mIslandRect, pillH / 2f, pillH / 2f, mIslandBgPaint);
++        canvas.drawRoundRect(mIslandRect, pillH / 2f, pillH / 2f, mIslandBorderPaint);
++
++        final float eyeWidth = dpToPx(8.5f);
++        final float eyeHeight = dpToPx(13f) * mBlinkScaleY;
++        final float eyeSpacing = dpToPx(18f);
++        final float cornerRadius = eyeWidth / 2f;
++
++        final float leftEyeCenterX = width / 2f - eyeSpacing / 2f;
++        final float rightEyeCenterX = width / 2f + eyeSpacing / 2f;
++
++        mLeftEyeRect.set(
++                leftEyeCenterX - eyeWidth / 2f + mGazeOffsetX,
++                centerY - eyeHeight / 2f + mGazeOffsetY,
++                leftEyeCenterX + eyeWidth / 2f + mGazeOffsetX,
++                centerY + eyeHeight / 2f + mGazeOffsetY
++        );
++        canvas.drawRoundRect(mLeftEyeRect, cornerRadius, cornerRadius, mEyePaint);
++
++        mRightEyeRect.set(
++                rightEyeCenterX - eyeWidth / 2f + mGazeOffsetX,
++                centerY - eyeHeight / 2f + mGazeOffsetY,
++                rightEyeCenterX + eyeWidth / 2f + mGazeOffsetX,
++                centerY + eyeHeight / 2f + mGazeOffsetY
++        );
++        canvas.drawRoundRect(mRightEyeRect, cornerRadius, cornerRadius, mEyePaint);
++
++        if (mBlinkScaleY > 0.5f) {
++            float shineRadius = dpToPx(2.1f);
++            canvas.drawCircle(
++                    leftEyeCenterX - dpToPx(1.2f) + mGazeOffsetX,
++                    centerY - dpToPx(2.3f) + mGazeOffsetY,
++                    shineRadius,
++                    mShinePaint
++            );
++            canvas.drawCircle(
++                    rightEyeCenterX - dpToPx(1.2f) + mGazeOffsetX,
++                    centerY - dpToPx(2.3f) + mGazeOffsetY,
++                    shineRadius,
++                    mShinePaint
++            );
++        }
++    }
++
++    private float dpToPx(float dp) {
++        return dp * getResources().getDisplayMetrics().density;
++    }
++}
+diff --git a/src/org/lineageos/setupwizard/widget/TouchRippleLayout.java b/src/org/lineageos/setupwizard/widget/TouchRippleLayout.java
+new file mode 100644
+index 0000000..1d340dc
+--- /dev/null
++++ b/src/org/lineageos/setupwizard/widget/TouchRippleLayout.java
+@@ -0,0 +1,141 @@
++/*
++ * SPDX-FileCopyrightText: 2026 The BlazeAOSP Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.lineageos.setupwizard.widget;
++
++import android.animation.ValueAnimator;
++import android.content.Context;
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.graphics.Paint;
++import android.util.AttributeSet;
++import android.view.MotionEvent;
++import android.view.animation.DecelerateInterpolator;
++import android.widget.FrameLayout;
++
++import java.util.ArrayList;
++import java.util.Iterator;
++import java.util.List;
++
++/**
++ * Touch container that renders organic fluid ripples on tap
++ * and drives PeekingMascotView gaze tracking.
++ */
++public class TouchRippleLayout extends FrameLayout {
++
++    private static class Ripple {
++        float x;
++        float y;
++        float radius;
++        int alpha;
++
++        Ripple(float x, float y) {
++            this.x = x;
++            this.y = y;
++            this.radius = 0f;
++            this.alpha = 180;
++        }
++    }
++
++    private final Paint mRipplePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final List<Ripple> mRipples = new ArrayList<>();
++    private PeekingMascotView mMascotView;
++
++    public TouchRippleLayout(Context context) {
++        this(context, null);
++    }
++
++    public TouchRippleLayout(Context context, AttributeSet attrs) {
++        this(context, attrs, 0);
++    }
++
++    public TouchRippleLayout(Context context, AttributeSet attrs, int defStyleAttr) {
++        super(context, attrs, defStyleAttr);
++        init();
++    }
++
++    private void init() {
++        setWillNotDraw(false);
++        mRipplePaint.setStyle(Paint.Style.STROKE);
++        mRipplePaint.setStrokeWidth(dpToPx(1.8f));
++        mRipplePaint.setColor(Color.parseColor("#FF6B8B")); // Soft peach-pink
++    }
++
++    public void setMascotView(PeekingMascotView mascotView) {
++        mMascotView = mascotView;
++    }
++
++    @Override
++    public boolean onInterceptTouchEvent(MotionEvent ev) {
++        handleTouch(ev);
++        return super.onInterceptTouchEvent(ev);
++    }
++
++    @Override
++    public boolean onTouchEvent(MotionEvent event) {
++        handleTouch(event);
++        return true;
++    }
++
++    private void handleTouch(MotionEvent event) {
++        switch (event.getActionMasked()) {
++            case MotionEvent.ACTION_DOWN:
++                addRipple(event.getX(), event.getY());
++                if (mMascotView != null) {
++                    mMascotView.setGaze(event.getRawX(), event.getRawY());
++                }
++                break;
++            case MotionEvent.ACTION_MOVE:
++                if (mMascotView != null) {
++                    mMascotView.setGaze(event.getRawX(), event.getRawY());
++                }
++                break;
++            case MotionEvent.ACTION_UP:
++            case MotionEvent.ACTION_CANCEL:
++                if (mMascotView != null) {
++                    postDelayed(() -> {
++                        if (mMascotView != null) mMascotView.resetGaze();
++                    }, 500);
++                }
++                break;
++        }
++    }
++
++    private void addRipple(float x, float y) {
++        final Ripple ripple = new Ripple(x, y);
++        mRipples.add(ripple);
++
++        ValueAnimator anim = ValueAnimator.ofFloat(0f, 1f);
++        anim.setDuration(600);
++        anim.setInterpolator(new DecelerateInterpolator());
++        final float maxRadius = dpToPx(75f);
++        anim.addUpdateListener(animation -> {
++            float frac = (float) animation.getAnimatedValue();
++            ripple.radius = frac * maxRadius;
++            ripple.alpha = (int) (180 * (1f - frac));
++            invalidate();
++        });
++        anim.start();
++    }
++
++    @Override
++    protected void onDraw(Canvas canvas) {
++        super.onDraw(canvas);
++        Iterator<Ripple> it = mRipples.iterator();
++        while (it.hasNext()) {
++            Ripple r = it.next();
++            if (r.alpha <= 0) {
++                it.remove();
++            } else {
++                mRipplePaint.setAlpha(r.alpha);
++                canvas.drawCircle(r.x, r.y, r.radius, mRipplePaint);
++            }
++        }
++    }
++
++    private float dpToPx(float dp) {
++        return dp * getResources().getDisplayMetrics().density;
++    }
++}
+diff --git a/src/org/lineageos/setupwizard/widget/TypewriterTextView.java b/src/org/lineageos/setupwizard/widget/TypewriterTextView.java
+new file mode 100644
+index 0000000..513ed2c
+--- /dev/null
++++ b/src/org/lineageos/setupwizard/widget/TypewriterTextView.java
+@@ -0,0 +1,216 @@
++/*
++ * SPDX-FileCopyrightText: 2026 The BlazeAOSP Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.lineageos.setupwizard.widget;
++
++import android.animation.ValueAnimator;
++import android.content.Context;
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.graphics.LinearGradient;
++import android.graphics.Paint;
++import android.graphics.RectF;
++import android.graphics.Shader;
++import android.graphics.Typeface;
++import android.os.Handler;
++import android.os.Looper;
++import android.util.AttributeSet;
++import android.view.View;
++
++/**
++ * ColorOS 17 / iOS 27 Flagship OOBE Typewriter greeting text with glowing cursor,
++ * Living Flow gradient subtitle, and Liquid Glass OS badge pill.
++ */
++public class TypewriterTextView extends View {
++
++    private final Paint mBadgeBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mBadgeStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mBadgeTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mBadgeDotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++
++    private final Paint mGreetingPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mCursorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mSubtitlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final RectF mBadgeRect = new RectF();
++
++    private final String[] mGreetings = new String[]{
++            "Merhaba.", "Hello.", "你好.", "BlazeAOSP 17."
++    };
++    private final String mSubtitle = "İpeksi Akıcılık. Living Flow ile Tanışın.";
++    private final String mBadgeText = "ANDROID 17  •  BLAZE V5.0 OFFICIAL";
++
++    private int mCurrentIndex = 0;
++    private int mCharCount = 0;
++    private boolean mShowCursor = true;
++
++    private final Handler mHandler = new Handler(Looper.getMainLooper());
++    private ValueAnimator mCursorAnimator;
++    private OnTypingCompleteListener mListener;
++
++    public interface OnTypingCompleteListener {
++        void onTypingComplete();
++    }
++
++    public TypewriterTextView(Context context) {
++        this(context, null);
++    }
++
++    public TypewriterTextView(Context context, AttributeSet attrs) {
++        this(context, attrs, 0);
++    }
++
++    public TypewriterTextView(Context context, AttributeSet attrs, int defStyleAttr) {
++        super(context, attrs, defStyleAttr);
++        init();
++    }
++
++    private void init() {
++        mBadgeBgPaint.setColor(Color.parseColor("#24FFFFFF"));
++        mBadgeBgPaint.setStyle(Paint.Style.FILL);
++
++        mBadgeStrokePaint.setColor(Color.parseColor("#48FFFFFF"));
++        mBadgeStrokePaint.setStyle(Paint.Style.STROKE);
++        mBadgeStrokePaint.setStrokeWidth(dpToPx(1f));
++
++        mBadgeDotPaint.setColor(Color.parseColor("#FF9E44"));
++        mBadgeDotPaint.setStyle(Paint.Style.FILL);
++
++        mBadgeTextPaint.setColor(Color.parseColor("#E6F0FF"));
++        mBadgeTextPaint.setTextSize(spToPx(11f));
++        mBadgeTextPaint.setLetterSpacing(0.08f);
++        mBadgeTextPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
++
++        mGreetingPaint.setColor(Color.WHITE);
++        mGreetingPaint.setTextSize(spToPx(40f));
++        mGreetingPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
++        mGreetingPaint.setShadowLayer(dpToPx(12f), 0f, dpToPx(4f), Color.parseColor("#55000000"));
++
++        mCursorPaint.setColor(Color.parseColor("#FF9E44"));
++        mCursorPaint.setTextSize(spToPx(40f));
++        mCursorPaint.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
++
++        mSubtitlePaint.setTextSize(spToPx(17.5f));
++        mSubtitlePaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
++
++        mCursorAnimator = ValueAnimator.ofInt(0, 1);
++        mCursorAnimator.setDuration(450);
++        mCursorAnimator.setRepeatCount(ValueAnimator.INFINITE);
++        mCursorAnimator.setRepeatMode(ValueAnimator.REVERSE);
++        mCursorAnimator.addUpdateListener(anim -> {
++            boolean show = anim.getCurrentPlayTime() % 900 < 450;
++            if (show != mShowCursor) {
++                mShowCursor = show;
++                invalidate();
++            }
++        });
++        mCursorAnimator.start();
++    }
++
++    public void startTyping(OnTypingCompleteListener listener) {
++        mListener = listener;
++        mCurrentIndex = 0;
++        mCharCount = 0;
++        mHandler.removeCallbacksAndMessages(null);
++        typeNextChar();
++    }
++
++    private void typeNextChar() {
++        String currentStr = mGreetings[mCurrentIndex];
++        if (mCharCount < currentStr.length()) {
++            mCharCount++;
++            invalidate();
++            mHandler.postDelayed(this::typeNextChar, 85);
++        } else {
++            mHandler.postDelayed(() -> {
++                if (mCurrentIndex < mGreetings.length - 1) {
++                    mCurrentIndex++;
++                    mCharCount = 0;
++                    invalidate();
++                    mHandler.postDelayed(this::typeNextChar, 95);
++                } else {
++                    if (mListener != null) {
++                        mListener.onTypingComplete();
++                    }
++                }
++            }, 900);
++        }
++    }
++
++    @Override
++    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
++        int width = MeasureSpec.getSize(widthMeasureSpec);
++        int desiredHeight = (int) dpToPx(128f);
++        int height = resolveSize(desiredHeight, heightMeasureSpec);
++        setMeasuredDimension(width, height);
++    }
++
++    @Override
++    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
++        super.onSizeChanged(w, h, oldw, oldh);
++        if (w > 0) {
++            LinearGradient gradient = new LinearGradient(
++                    0, 0, w * 0.85f, 0,
++                    new int[]{
++                            Color.parseColor("#FFE4B5"),
++                            Color.parseColor("#FF9E6D"),
++                            Color.parseColor("#D8B4FE")
++                    },
++                    null, Shader.TileMode.CLAMP
++            );
++            mSubtitlePaint.setShader(gradient);
++        }
++    }
++
++    @Override
++    protected void onDetachedFromWindow() {
++        super.onDetachedFromWindow();
++        mHandler.removeCallbacksAndMessages(null);
++        if (mCursorAnimator != null) {
++            mCursorAnimator.cancel();
++        }
++    }
++
++    @Override
++    protected void onDraw(Canvas canvas) {
++        super.onDraw(canvas);
++
++        // 1. Liquid Glass OS Pill Badge
++        float badgeHeight = dpToPx(26f);
++        float textW = mBadgeTextPaint.measureText(mBadgeText);
++        float badgeWidth = textW + dpToPx(34f);
++        mBadgeRect.set(0f, dpToPx(2f), badgeWidth, dpToPx(2f) + badgeHeight);
++        canvas.drawRoundRect(mBadgeRect, badgeHeight / 2f, badgeHeight / 2f, mBadgeBgPaint);
++        canvas.drawRoundRect(mBadgeRect, badgeHeight / 2f, badgeHeight / 2f, mBadgeStrokePaint);
++
++        float dotCx = dpToPx(13f);
++        float dotCy = mBadgeRect.centerY();
++        canvas.drawCircle(dotCx, dotCy, dpToPx(3.5f), mBadgeDotPaint);
++        canvas.drawText(mBadgeText, dpToPx(23f), dotCy + spToPx(3.8f), mBadgeTextPaint);
++
++        // 2. Typewriter Greeting
++        String currentStr = mGreetings[mCurrentIndex];
++        String visibleStr = currentStr.substring(0, Math.min(mCharCount, currentStr.length()));
++
++        float greetingY = dpToPx(74f);
++        canvas.drawText(visibleStr, 0f, greetingY, mGreetingPaint);
++
++        if (mShowCursor) {
++            float textWidth = mGreetingPaint.measureText(visibleStr);
++            canvas.drawText(" |", textWidth, greetingY, mCursorPaint);
++        }
++
++        // 3. Living Flow Subtitle
++        float subtitleY = greetingY + dpToPx(32f);
++        canvas.drawText(mSubtitle, 0f, subtitleY, mSubtitlePaint);
++    }
++
++    private float spToPx(float sp) {
++        return sp * getResources().getDisplayMetrics().scaledDensity;
++    }
++
++    private float dpToPx(float dp) {
++        return dp * getResources().getDisplayMetrics().density;
++    }
++}
+diff --git a/src/org/lineageos/setupwizard/wizardmanager/WizardAction.java b/src/org/lineageos/setupwizard/wizardmanager/WizardAction.java
+index eb3ce31..d4a65ec 100644
+--- a/src/org/lineageos/setupwizard/wizardmanager/WizardAction.java
++++ b/src/org/lineageos/setupwizard/wizardmanager/WizardAction.java
+@@ -55,6 +55,13 @@ public class WizardAction implements Parcelable {
+         try {
+             intent = Intent.parseUri(mUri, URI_INTENT_SCHEME);
+             intent.addFlags(FLAG_GRANT_READ_URI_PERMISSION);
++            if (intent.getPackage() == null && intent.getComponent() == null) {
++                if (intent.getAction() != null && (intent.getAction().startsWith("org.lineageos.setupwizard")
++                        || intent.getAction().equals("com.android.wizard.LOAD")
++                        || intent.getAction().equals("com.android.wizard.NEXT"))) {
++                    intent.setPackage("org.lineageos.setupwizard");
++                }
++            }
+         } catch (URISyntaxException e) {
+             Log.e(TAG, "Bad URI: " + mUri);
+         }
+diff --git a/src/org/lineageos/setupwizard/wizardmanager/WizardManager.java b/src/org/lineageos/setupwizard/wizardmanager/WizardManager.java
+index 6453cb1..3b5ab68 100644
+--- a/src/org/lineageos/setupwizard/wizardmanager/WizardManager.java
++++ b/src/org/lineageos/setupwizard/wizardmanager/WizardManager.java
+@@ -172,6 +172,12 @@ public class WizardManager extends Activity {
+     }
+ 
+     private static boolean isIntentAvailable(Context context, Intent intent) {
++        if (intent == null) return false;
++        if (intent.getPackage() == null && intent.getComponent() == null) {
++            if (intent.getAction() != null && intent.getAction().startsWith("org.lineageos.setupwizard")) {
++                intent.setPackage(context.getPackageName());
++            }
++        }
+         return !context.getPackageManager().queryIntentActivities(intent,
+                 PackageManager.MATCH_DEFAULT_ONLY).isEmpty();
+     }
+-- 
+2.56.0
+

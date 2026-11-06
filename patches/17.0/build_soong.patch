@@ -1,0 +1,38 @@
+diff --git a/java/app_import.go b/java/app_import.go
+index 10121a2b5..4bd3bebbe 100644
+--- a/java/app_import.go
++++ b/java/app_import.go
+@@ -40,7 +40,7 @@ func init() {
+ var (
+ 	uncompressEmbeddedJniLibsRule = pctx.AndroidStaticRule("uncompress-embedded-jni-libs", blueprint.RuleParams{
+ 		Command2: blueprint.NewCommand(
+-			`if (`, android.ZipInfo, ` $in 'lib/*.so' 2>/dev/null | `,
++			`if (`, android.ZipInfo, ` $in 'lib/*.so' 'lib/*/*.so' 2>/dev/null | `,
+ 			android.Grep, ` -v ' stor ' >/dev/null) ; then `,
+ 			android.Zip2zip, ` -i $in -o $out -0 'lib/**/*.so'`,
+ 			`; else `, android.Cp, ` -f $in $out; fi`,
+diff --git a/scripts/gen_build_prop.py b/scripts/gen_build_prop.py
+index e7ef5906d..4de1189bd 100644
+--- a/scripts/gen_build_prop.py
++++ b/scripts/gen_build_prop.py
+@@ -446,16 +446,16 @@ def append_additional_vendor_props(args):
+ 
+   # Although these variables are prefixed with TARGET_RECOVERY_, they are also needed under charger
+   # mode (via libminui).
+-  if config["RecoveryDefaultRotation"]:
++  if config.get("RecoveryDefaultRotation"):
+     props.append(f"ro.minui.default_rotation={config['RecoveryDefaultRotation']}")
+ 
+-  if config["RecoveryDefaultTouchRotation"]:
++  if config.get("RecoveryDefaultTouchRotation"):
+     props.append(f"ro.minui.default_touch_rotation={config['RecoveryDefaultTouchRotation']}")
+ 
+-  if config["RecoveryOverscanPercent"]:
++  if config.get("RecoveryOverscanPercent"):
+     props.append(f"ro.minui.overscan_percent={config['RecoveryOverscanPercent']}")
+ 
+-  if config["RecoveryPixelFormat"]:
++  if config.get("RecoveryPixelFormat"):
+     props.append(f"ro.minui.pixel_format={config['RecoveryPixelFormat']}")
+ 
+   if "RecoveryNoInitialModsetFlush" in config:

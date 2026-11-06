@@ -1,0 +1,95 @@
+From 27f72f60cbba62bd0badfa69e00a628635626111 Mon Sep 17 00:00:00 2001
+From: DarkMorpheus-pc <ergunbulutarslan@gmail.com>
+Date: Wed, 4 Nov 2026 02:19:12 +0300
+Subject: [PATCH 1/3] Quickstep: ColorOS/Lineage motion harmony, Dynamic Island
+ Media & Call swallow flight, and early GPU load-up boost
+
+Change-Id: I09e3e040904eec33bd09173170e34f6d89a96ade
+---
+ .../launcher3/QuickstepTransitionManager.java |  6 +++++
+ .../android/quickstep/AbsSwipeUpHandler.java  |  6 +++++
+ .../util/DynamicIslandFlightHelper.java       | 27 +++++++++++++++++--
+ 3 files changed, 37 insertions(+), 2 deletions(-)
+
+diff --git a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
+index 146a3a4361..0943d3c7f2 100644
+--- a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
++++ b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
+@@ -398,6 +398,12 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+ 
+     /** Give icon taps their first frame without waiting for WM's opening app surface. */
+     public void beginImmediateAppLaunch(View source, ItemInfo item) {
++        try {
++            if (mDragLayer != null && mDragLayer.getViewRootImpl() != null) {
++                mDragLayer.getViewRootImpl().notifyRendererForGpuLoadUp("BlazeAppLaunch");
++            }
++        } catch (Throwable ignored) {
++        }
+         if (true) {
+             return;
+         }
+diff --git a/quickstep/src/com/android/quickstep/AbsSwipeUpHandler.java b/quickstep/src/com/android/quickstep/AbsSwipeUpHandler.java
+index 3b1129354a..07627fb01e 100644
+--- a/quickstep/src/com/android/quickstep/AbsSwipeUpHandler.java
++++ b/quickstep/src/com/android/quickstep/AbsSwipeUpHandler.java
+@@ -1280,6 +1280,12 @@ public abstract class AbsSwipeUpHandler<
+         TaskUtils.closeSystemWindowsAsync(CLOSE_SYSTEM_WINDOWS_REASON_RECENTS);
+ 
+         if (mRecentsView != null) {
++            try {
++                if (mRecentsView.getViewRootImpl() != null) {
++                    mRecentsView.getViewRootImpl().notifyRendererForGpuLoadUp("BlazeSwipeToHome");
++                }
++            } catch (Throwable ignored) {
++            }
+             final View rv = mRecentsView;
+             mRecentsView.getViewTreeObserver().addOnDrawListener(new OnDrawListener() {
+                 boolean mHandled = false;
+diff --git a/quickstep/src/com/android/quickstep/util/DynamicIslandFlightHelper.java b/quickstep/src/com/android/quickstep/util/DynamicIslandFlightHelper.java
+index a4c65cfde3..d859fb131a 100644
+--- a/quickstep/src/com/android/quickstep/util/DynamicIslandFlightHelper.java
++++ b/quickstep/src/com/android/quickstep/util/DynamicIslandFlightHelper.java
+@@ -118,8 +118,17 @@ public final class DynamicIslandFlightHelper {
+ 
+         try {
+             AudioManager am = context.getSystemService(AudioManager.class);
+-            if (am != null && am.isMusicActive() && isMediaCapablePackage(context, pkg)) {
+-                return true;
++            if (am != null) {
++                int mode = am.getMode();
++                if ((mode == AudioManager.MODE_IN_CALL
++                        || mode == AudioManager.MODE_IN_COMMUNICATION
++                        || mode == AudioManager.MODE_RINGTONE)
++                        && isCallCapablePackage(pkg)) {
++                    return true;
++                }
++                if (am.isMusicActive() && isMediaCapablePackage(context, pkg)) {
++                    return true;
++                }
+             }
+         } catch (Throwable ignored) {
+         }
+@@ -200,6 +209,20 @@ public final class DynamicIslandFlightHelper {
+                 || state == PlaybackState.STATE_SKIPPING_TO_PREVIOUS;
+     }
+ 
++    private static boolean isCallCapablePackage(String pkg) {
++        String lower = pkg.toLowerCase();
++        return lower.contains("dialer")
++                || lower.contains("incallui")
++                || lower.contains("telecom")
++                || lower.contains("phone")
++                || lower.contains("whatsapp")
++                || lower.contains("telegram")
++                || lower.contains("discord")
++                || lower.contains("skype")
++                || lower.contains("viber")
++                || lower.contains("signal");
++    }
++
+     private static boolean isMediaCapablePackage(Context context, String pkg) {
+         if (KNOWN_MEDIA_PACKAGES.contains(pkg)) {
+             return true;
+-- 
+2.56.0
+

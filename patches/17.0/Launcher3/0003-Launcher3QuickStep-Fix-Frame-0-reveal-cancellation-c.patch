@@ -1,0 +1,135 @@
+From 0e669d9a811780cca761ddac6148f94414c85734 Mon Sep 17 00:00:00 2001
+From: DarkMorpheus-pc <ergunbulutarslan@gmail.com>
+Date: Thu, 5 Nov 2026 23:30:46 +0300
+Subject: [PATCH 3/3] Launcher3QuickStep: Fix Frame-0 reveal cancellation
+ causing background unblur delay & unify interrupted scale channel
+
+Change-Id: Ic0b5afe6c20a79bf3aabe91fb4d83069b2e8637b
+---
+ .../launcher3/QuickstepTransitionManager.java | 20 +++++++++++---
+ .../util/ScalingWorkspaceRevealAnim.kt        | 27 ++++++++++++-------
+ 2 files changed, 35 insertions(+), 12 deletions(-)
+
+diff --git a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
+index cebac801c5..561beed09b 100644
+--- a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
++++ b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
+@@ -1104,12 +1104,23 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+                 // TODO(b/367591368): ideally these animations would be refactored to be
+                 //  controlled centrally so each instances doesn't need to care about this
+                 //  coordination.
+-                float[] scale = new float[]{view.getScaleX(), scales[1]};
++                float currentScale = view.getScaleX();
+ 
+                 // Cancel any ongoing animations. This is necessary to avoid a conflict between
+                 // e.g. the unfinished animation triggered when closing an app back to Home and
+                 // this animation caused by a launch.
+                 Animations.Companion.cancelOngoingAnimation(view);
++                if (view == mLauncher.getWorkspace()) {
++                    LauncherAnimUtils.WORKSPACE_SCALE_PROPERTY_FACTORY
++                            .get(LauncherAnimUtils.SCALE_INDEX_WORKSPACE_STATE)
++                            .set(mLauncher.getWorkspace(), 1f);
++                } else if (view == mLauncher.getHotseat()) {
++                    LauncherAnimUtils.HOTSEAT_SCALE_PROPERTY_FACTORY
++                            .get(LauncherAnimUtils.SCALE_INDEX_WORKSPACE_STATE)
++                            .set(mLauncher.getHotseat(), 1f);
++                }
++                SCALE_PROPERTY.set(view, currentScale);
++                float[] scale = new float[]{currentScale, scales[1]};
+                 // Make sure to cache the current animation, so it can be properly interrupted.
+                 Animations.Companion.setOngoingAnimation(view, launcherAnimator);
+ 
+@@ -1124,8 +1135,11 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+                     SCALE_PROPERTY.set(view, 1f);
+                     view.setLayerType(View.LAYER_TYPE_NONE, null);
+ 
+-                    // Reset the cached animation.
+-                    Animations.Companion.setOngoingAnimation(view, null /* animation */);
++                    // Reset the cached animation only if it still belongs to this launcherAnimator.
++                    if (view.getTag(com.android.app.animation.R.id.ongoing_animation)
++                            == launcherAnimator) {
++                        view.setTag(com.android.app.animation.R.id.ongoing_animation, null);
++                    }
+                 });
+                 mLauncher.resumeExpensiveViewUpdates();
+             };
+diff --git a/quickstep/src/com/android/quickstep/util/ScalingWorkspaceRevealAnim.kt b/quickstep/src/com/android/quickstep/util/ScalingWorkspaceRevealAnim.kt
+index 2244d5fb25..3666fea599 100644
+--- a/quickstep/src/com/android/quickstep/util/ScalingWorkspaceRevealAnim.kt
++++ b/quickstep/src/com/android/quickstep/util/ScalingWorkspaceRevealAnim.kt
+@@ -101,6 +101,7 @@ constructor(
+         // moment the finger lifts, measured from its SurfaceFlinger layers: its blur is 93% left
+         // at 25 ms, half at 100 ms and a fifth at 175 ms. Home's zoom and fade follow it.
+         private const val COS_SPRING_RAD_PER_S = 18f
++        private const val COS_BLUR_SPRING_RAD_PER_S = 23f
+         @JvmField
+         val COS_BLUR_INTERPOLATOR = Interpolator { progress ->
+             val wt = COS_SPRING_RAD_PER_S * SCALE_DURATION_MS / 1000f
+@@ -108,6 +109,12 @@ constructor(
+             val t = wt * progress
+             (1 - (1 + t) * exp(-t)) / end
+         }
++        val COS_FAST_UNBLUR_INTERPOLATOR = Interpolator { progress ->
++            val wt = COS_BLUR_SPRING_RAD_PER_S * SCALE_DURATION_MS / 1000f
++            val end = 1 - (1 + wt) * exp(-wt)
++            val t = wt * progress
++            (1 - (1 + t) * exp(-t)) / end
++        }
+         // ColorOS fades home in, already blurred, over the first frames after the finger lifts.
+         private const val COS_FADE_PROGRESS = 0.24f
+     }
+@@ -222,7 +229,7 @@ constructor(
+             depthController = (launcher as? QuickstepLauncher)?.depthController
+             transitionConfig.setInterpolator(
+                 StateAnimationConfig.ANIM_DEPTH,
+-                if (cos) COS_BLUR_INTERPOLATOR else SCALE_INTERPOLATOR,
++                if (cos) COS_FAST_UNBLUR_INTERPOLATOR else SCALE_INTERPOLATOR,
+             )
+             if (!cos) {
+                 depthController?.pauseBlursOnWindows(true)
+@@ -258,7 +265,7 @@ constructor(
+             // Add a blur animation to the scrim layer.
+             val maxBlurRadius =
+                 launcher.resources.getDimensionPixelSize(R.dimen.max_depth_blur_radius_enhanced)
+-            val blurInterpolator = if (cos) COS_BLUR_INTERPOLATOR else BLUR_INTERPOLATOR
++            val blurInterpolator = if (cos) COS_FAST_UNBLUR_INTERPOLATOR else BLUR_INTERPOLATOR
+             val blurAnimator = ValueAnimator.ofFloat(1f, 0f)
+             blurAnimator.interpolator = blurInterpolator
+             blurAnimator.addUpdateListener {
+@@ -388,16 +395,16 @@ constructor(
+         } ?: content
+         if (cos) {
+             result.addListener(object : AnimatorListenerAdapter() {
+-                override fun onAnimationStart(animation: Animator) {
+-                    Animations.setOngoingAnimation(launcher.workspace, result)
+-                    Animations.setOngoingAnimation(launcher.hotseat, result)
+-                }
+                 override fun onAnimationCancel(animation: Animator) {
+                     cancelled = true
+                 }
+                 override fun onAnimationEnd(animation: Animator) {
+-                    Animations.setOngoingAnimation(launcher.workspace, animation = null)
+-                    Animations.setOngoingAnimation(launcher.hotseat, animation = null)
++                    if (launcher.workspace.getTag(com.android.app.animation.R.id.ongoing_animation) === result) {
++                        launcher.workspace.setTag(com.android.app.animation.R.id.ongoing_animation, null)
++                    }
++                    if (launcher.hotseat.getTag(com.android.app.animation.R.id.ongoing_animation) === result) {
++                        launcher.hotseat.setTag(com.android.app.animation.R.id.ongoing_animation, null)
++                    }
+                     if (cancelled) {
+                         WORKSPACE_SCALE_PROPERTY_FACTORY[SCALE_INDEX_WORKSPACE_STATE].set(
+                             launcher.workspace,
+@@ -466,7 +473,9 @@ constructor(
+     private fun settleDepthIfIdle(depthController: LauncherDepthController) {
+         launcher.dragLayer.post {
+             val stateManager = launcher.stateManager
+-            if (launcher.hasBeenResumed() &&
++            val hasNewWorkspaceAnim =
++                launcher.workspace.getTag(com.android.app.animation.R.id.ongoing_animation) != null
++            if (!hasNewWorkspaceAnim &&
+                 stateManager.isInStableState(LauncherState.NORMAL) && !stateManager.isInTransition) {
+                 depthController.stateDepth.value = LauncherState.NORMAL.getDepth(launcher)
+                 depthController.resetWallpaperDepth()
+-- 
+2.56.0
+

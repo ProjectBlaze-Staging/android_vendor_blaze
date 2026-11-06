@@ -1,0 +1,124 @@
+diff --git a/target/product/gsi/Android.bp b/target/product/gsi/Android.bp
+index 4c0552eb91..3a8ff14d1c 100644
+--- a/target/product/gsi/Android.bp
++++ b/target/product/gsi/Android.bp
+@@ -98,15 +98,11 @@ android_filesystem_defaults {
+         "Launcher3QuickStep",
+         "Provision",
+         "Settings",
++        "SettingsIntelligence",
++        "privapp_whitelist_com.android.settings.intelligence",
+         "StorageManager",
+         "SystemUI",
+ 
+-        // LineageOS Platform & SDK
+-        "org.lineageos.platform",
+-        "org.lineageos.platform.internal",
+-        "org.lineageos.platform-res",
+-        "LineageSettingsProvider",
+-
+         // Allowlist for handheld packages
+         "preinstalled-packages-handheld-system-ext.xml",
+ 
+@@ -135,13 +131,9 @@ android_filesystem_defaults {
+         ///////////////////////////////////////////
+         // gsi_product
+         ///////////////////////////////////////////
+-        "Browser2",
+-        "Aperture",
+-        "ApertureFrameworksBaseOverlay",
+-        "ApertureLensLauncher",
+-        "AuroraStore",
+-        "Firefox",
+-        "FossifyGallery",
++        "webview",
++        "libwebviewchromium_loader",
++        "libwebviewchromium_plat_support",
+         "Dialer",
+         "LatinIME",
+         "messaging",
+@@ -190,6 +182,84 @@ android_system_image {
+         // init-second-stage to load debug policy from system_ext.
+         // This option is only meant to be set by compliance GSI targets.
+         "system_ext_userdebug_plat_sepolicy.cil",
++
++        // LineageOS Platform & Setup
++        "LineageSetupWizard",
++        "org.lineageos.platform",
++        "org.lineageos.platform.internal",
++        "org.lineageos.platform-res",
++        "LineageSettingsProvider",
++
++        // Applications & Utilities
++        "Aperture",
++        "ApertureFrameworksBaseOverlay",
++        "ApertureLensLauncher",
++        "DeskClock",
++        "ExactCalculator",
++        "Gallery2",
++        "Recorder",
++        "Etar",
++        "AudioFX",
++        "Music",
++        "Firefox",
++        "FossifyGallery",
++
++        // Overlays & Themes
++        "GmsOverlay",
++        "GmsSettingsOverlay",
++        "GmsSettingsProviderOverlay",
++        "GmsSetupWizardOverlay",
++        "Launcher3Overlay",
++        "PermissionControllerOverlay",
++        "NetworkStackOverlay",
++        "DocumentsUIOverlay",
++        "LineageBlackTheme",
++        "FontGoogleSansFlexOverlay",
++
++        // Boot animation
++        "bootanimation.zip",
++        "bootanimation-dark.zip",
++
++        // Wallpapers & Backgrounds
++        "Backgrounds",
++        "ThemePicker",
++        "WallpaperCropper",
++        "Wallpapera.jpg",
++        "Wallpaperb.jpg",
++        "Wallpaperl.jpg",
++
++        // Google Mobile Services (GApps)
++        "Velvet",
++        "YouTube",
++        "PrebuiltGmail",
++        "GoogleWeather",
++        "GmsCore",
++        "Phonesky",
++        "GoogleServicesFramework",
++        "GooglePartnerSetup",
++        "GoogleContactsSyncAdapter",
++        "GoogleCalendarSyncAdapter",
++        "GoogleFeedback",
++        "GoogleRestore",
++        "Wellbeing",
++        "PrebuiltExchange3Google",
++        "SpeechServicesByGoogle",
++        "talkback",
++        "MarkupGoogle_v2",
++        "com.google.android.dialer.support",
++        "com.google.android.dialer.support.xml",
++        "d2d_cable_migration_feature.xml",
++        "default-permissions-google.xml",
++        "default-permissions-mtg.xml",
++        "gapps.rc",
++        "gms_fsverity_cert.der",
++        "google-hiddenapi-package-allowlist.xml",
++        "google.xml",
++        "privapp-permissions-google-product.xml",
++        "privapp-permissions-google-system-ext.xml",
++        "privapp-permissions-mtg.xml",
++        "sysconfig-mtg.xml",
++        "wellbeing.xml",
+     ] + select(soong_config_variable("gsi", "import_usb_debugging_test_app"), {
+         true: ["UsbDisableDebugger"],
+         default: [],

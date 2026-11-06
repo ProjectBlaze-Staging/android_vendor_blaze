@@ -1,0 +1,220 @@
+From 52f18956c41d38ced23f0daf52e0b4b5812f862a Mon Sep 17 00:00:00 2001
+From: DarkMorpheus-pc <ergunbulutarslan@gmail.com>
+Date: Thu, 5 Nov 2026 21:58:37 +0300
+Subject: [PATCH 2/3] Launcher3: Fix rapid app open/close interruption
+ collision and fallback closing anim
+
+Change-Id: I44c7961d1f68699a023f4cdb4f6b8d4f9ea53998
+---
+ .../launcher3/QuickstepTransitionManager.java |  5 +-
+ .../uioverrides/QuickstepLauncher.java        |  2 +-
+ .../android/quickstep/AbsSwipeUpHandler.java  | 65 +++++++++++++++----
+ .../quickstep/LauncherSwipeHandlerV2.java     |  1 +
+ .../util/ScalingWorkspaceRevealAnim.kt        | 16 ++++-
+ .../launcher3/views/FloatingIconView.java     | 11 ++++
+ 6 files changed, 82 insertions(+), 18 deletions(-)
+
+diff --git a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
+index 0943d3c7f2..cebac801c5 100644
+--- a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
++++ b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
+@@ -1991,8 +1991,9 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+         for (RemoteAnimationTarget target : targets) {
+             if (target.mode == MODE_CLOSING) {
+                 numTargets++;
+-                if (numTargets > 1 || target.windowConfiguration.getWindowingMode()
+-                        == WINDOWING_MODE_MULTI_WINDOW) {
++                if (target.windowConfiguration.getWindowingMode()
++                        == WINDOWING_MODE_MULTI_WINDOW
++                        || (!mCosLaunch && numTargets > 1)) {
+                     return true;
+                 }
+             }
+diff --git a/quickstep/src/com/android/launcher3/uioverrides/QuickstepLauncher.java b/quickstep/src/com/android/launcher3/uioverrides/QuickstepLauncher.java
+index 60f1f63a4c..c37640330a 100644
+--- a/quickstep/src/com/android/launcher3/uioverrides/QuickstepLauncher.java
++++ b/quickstep/src/com/android/launcher3/uioverrides/QuickstepLauncher.java
+@@ -473,7 +473,7 @@ public class QuickstepLauncher extends Launcher implements RecentsViewContainer,
+         // An app tapped while the last one still flies home launches right away: finish that
+         // transition to home first, then launch, while the flight carries on (ColorOS behaviour).
+         RunnableList deferred = new RunnableList();
+-        if (com.android.quickstep.AbsSwipeUpHandler.finishHomeFlightForLaunch(() -> {
++        if (com.android.quickstep.AbsSwipeUpHandler.finishHomeFlightForLaunch(v, () -> {
+             RunnableList actual = startActivitySafely(v, intent, item);
+             if (actual != null) {
+                 actual.add(deferred::executeAllAndDestroy);
+diff --git a/quickstep/src/com/android/quickstep/AbsSwipeUpHandler.java b/quickstep/src/com/android/quickstep/AbsSwipeUpHandler.java
+index 07627fb01e..0a272c2f8a 100644
+--- a/quickstep/src/com/android/quickstep/AbsSwipeUpHandler.java
++++ b/quickstep/src/com/android/quickstep/AbsSwipeUpHandler.java
+@@ -355,6 +355,8 @@ public abstract class AbsSwipeUpHandler<
+     // Set when WM finished the recents transition early (an app was launched from home while the
+     // window was still flying home); the flight then finishes without the window.
+     private boolean mHomeAnimDetachedFromWindow;
++    // The workspace icon/widget view targeted by the current home animation, if any.
++    @Nullable protected View mTargetWorkspaceView;
+     // The handler whose window is currently flying home, if any.
+     private static WeakReference<AbsSwipeUpHandler> sHomeFlight = new WeakReference<>(null);
+     // Possible second animation running at the same time as mRunningWindowAnim
+@@ -1167,29 +1169,56 @@ public abstract class AbsSwipeUpHandler<
+      */
+     @UiThread
+     public static boolean finishHomeFlightForLaunch(@NonNull Runnable launch) {
++        return finishHomeFlightForLaunch(null, launch);
++    }
++
++    @UiThread
++    public static boolean finishHomeFlightForLaunch(
++            @Nullable View launchingView, @NonNull Runnable launch) {
+         AbsSwipeUpHandler handler = sHomeFlight.get();
+-        return handler != null && handler.finishHomeFlightEarly(launch);
++        return handler != null && handler.finishHomeFlightEarly(launchingView, launch);
+     }
+ 
+     private boolean isParallelHomeFlightEnabled() {
+         return QuickstepTransitionManager.cosExperience(mContext);
+     }
+ 
+-    private boolean finishHomeFlightEarly(@NonNull Runnable launch) {
++    private boolean finishHomeFlightEarly(
++            @Nullable View launchingView, @NonNull Runnable launch) {
+         if (!isParallelHomeFlightEnabled() || mRecentsAnimationController == null || mGestureState.getEndTarget() != HOME
+                 || mStateCallback.hasStates(STATE_CURRENT_TASK_FINISHED)
+                 || mStateCallback.hasStates(STATE_HANDLER_INVALIDATED)) {
+             return false;
+         }
++        sHomeFlight.clear();
+         RectFSpringAnim flight = mCatchableWindowAnim;
+-        detachHomeAnimationFromWindow();
+-        if (!mHomeAnimDetachedFromWindow) {
+-            return false;
++        boolean sameTargetRelaunch =
++                launchingView != null && launchingView == mTargetWorkspaceView;
++        if (sameTargetRelaunch) {
++            // Re-launching the exact same icon that is currently flying home: finish its
++            // closing FloatingIconView cleanly right now so it never collides with the new
++            // opening FloatingIconView or stalls the UI thread with a synchronous screenshot.
++            mCatchableWindowAnim = null;
++            endRunningWindowAnim(false /* cancel */);
++        } else {
++            detachHomeAnimationFromWindow();
++            if (!mHomeAnimDetachedFromWindow) {
++                return false;
++            }
++            // Finishing hides the window at once; if the flying window is still large, fly a
++            // stand-in frame into the other icon while the newly tapped icon launches.
++            if (flight != null && flight.isRunning()
++                    && (mDp == null
++                            || flight.getCurrentRect().width()
++                                    > mDp.getDeviceProperties().getWidthPx() * 0.36f)) {
++                flyStandIn(flight);
++            }
+         }
+-        // Finishing hides the window at once, so its last frame flies on in its place.
+-        flyStandIn(flight);
+         mStateCallback.runOnceAtState(STATE_CURRENT_TASK_FINISHED, launch);
+-        // Settle on home now; the detached flight carries on to the icon on its own.
++        // Mark screenshot captured immediately so switchToScreenshot() does not wait for an
++        // async UI_HELPER_EXECUTOR IPC round-trip on the app-launch critical path.
++        mStateCallback.setStateOnUiThread(STATE_SCREENSHOT_CAPTURED);
++        // Settle on home now; any detached flight carries on to its icon on its own.
+         mGestureState.setState(STATE_RECENTS_SCROLLING_FINISHED);
+         mGestureState.setState(STATE_END_TARGET_ANIMATION_FINISHED);
+         return true;
+@@ -1398,12 +1427,20 @@ public abstract class AbsSwipeUpHandler<
+ 
+     private boolean canCatchWindow(MotionEvent ev) {
+         RectFSpringAnim anim = mCatchableWindowAnim;
+-        return anim != null
+-                && anim.isRunning()
+-                && mRecentsAnimationController != null
+-                && mGestureState.getEndTarget() == HOME
+-                && getOrientationHandler() == RecentsPagedOrientationHandler.PORTRAIT
+-                && anim.getCurrentRect().contains(ev.getX(), ev.getY());
++        if (anim == null
++                || !anim.isRunning()
++                || mRecentsAnimationController == null
++                || mGestureState.getEndTarget() != HOME
++                || getOrientationHandler() != RecentsPagedOrientationHandler.PORTRAIT
++                || !anim.getCurrentRect().contains(ev.getX(), ev.getY())) {
++            return false;
++        }
++        if (isParallelHomeFlightEnabled() && mDp != null) {
++            // Once the closing window has shrunk near its target icon, deliver taps immediately
++            // to Launcher on ACTION_DOWN instead of holding them in mPendingDown until ACTION_UP.
++            return anim.getCurrentRect().width() > mDp.getDeviceProperties().getWidthPx() * 0.42f;
++        }
++        return true;
+     }
+ 
+     /**
+diff --git a/quickstep/src/com/android/quickstep/LauncherSwipeHandlerV2.java b/quickstep/src/com/android/quickstep/LauncherSwipeHandlerV2.java
+index 64ff65a4bd..af6141bf4d 100644
+--- a/quickstep/src/com/android/quickstep/LauncherSwipeHandlerV2.java
++++ b/quickstep/src/com/android/quickstep/LauncherSwipeHandlerV2.java
+@@ -157,6 +157,7 @@ public class LauncherSwipeHandlerV2 extends AbsSwipeUpHandler<
+         }
+         // This handler plays the window's flight home itself, so the shell must not as well.
+         mHandOffAnimationToHome = false;
++        mTargetWorkspaceView = workspaceView;
+         if (workspaceView instanceof LauncherAppWidgetHostView) {
+             return createWidgetHomeAnimationFactory((LauncherAppWidgetHostView) workspaceView,
+                     isTargetTranslucent, runningTaskTarget);
+diff --git a/quickstep/src/com/android/quickstep/util/ScalingWorkspaceRevealAnim.kt b/quickstep/src/com/android/quickstep/util/ScalingWorkspaceRevealAnim.kt
+index b71a1fbe6a..2244d5fb25 100644
+--- a/quickstep/src/com/android/quickstep/util/ScalingWorkspaceRevealAnim.kt
++++ b/quickstep/src/com/android/quickstep/util/ScalingWorkspaceRevealAnim.kt
+@@ -388,13 +388,27 @@ constructor(
+         } ?: content
+         if (cos) {
+             result.addListener(object : AnimatorListenerAdapter() {
++                override fun onAnimationStart(animation: Animator) {
++                    Animations.setOngoingAnimation(launcher.workspace, result)
++                    Animations.setOngoingAnimation(launcher.hotseat, result)
++                }
+                 override fun onAnimationCancel(animation: Animator) {
+                     cancelled = true
+                 }
+                 override fun onAnimationEnd(animation: Animator) {
+                     Animations.setOngoingAnimation(launcher.workspace, animation = null)
+                     Animations.setOngoingAnimation(launcher.hotseat, animation = null)
+-                    if (cancelled) settleDepthIfIdle(launcher.depthController)
++                    if (cancelled) {
++                        WORKSPACE_SCALE_PROPERTY_FACTORY[SCALE_INDEX_WORKSPACE_STATE].set(
++                            launcher.workspace,
++                            1f,
++                        )
++                        HOTSEAT_SCALE_PROPERTY_FACTORY[SCALE_INDEX_WORKSPACE_STATE].set(
++                            launcher.hotseat,
++                            1f,
++                        )
++                        settleDepthIfIdle(launcher.depthController)
++                    }
+                 }
+             })
+         }
+diff --git a/src/com/android/launcher3/views/FloatingIconView.java b/src/com/android/launcher3/views/FloatingIconView.java
+index 035d942253..71c019459a 100644
+--- a/src/com/android/launcher3/views/FloatingIconView.java
++++ b/src/com/android/launcher3/views/FloatingIconView.java
+@@ -641,6 +641,17 @@ public class FloatingIconView extends FrameLayout implements
+             boolean hideOriginal, RectF positionOut, boolean isOpening) {
+         final DragLayer dragLayer = launcher.getDragLayer();
+         ViewGroup parent = (ViewGroup) dragLayer.getParent();
++        // Ensure no previous FloatingIconView (e.g. from a parallel closing animation) is still
++        // bound to the same originalView when a rapid re-launch or close starts.
++        if (originalView != null && parent != null) {
++            for (int i = parent.getChildCount() - 1; i >= 0; i--) {
++                View child = parent.getChildAt(i);
++                if (child instanceof FloatingIconView existing
++                        && existing.mOriginalIcon == originalView) {
++                    existing.fastFinish();
++                }
++            }
++        }
+         FloatingIconView view = launcher.getViewCache().getView(R.layout.floating_icon_view,
+                 launcher, parent);
+         view.recycle();
+-- 
+2.56.0
+
