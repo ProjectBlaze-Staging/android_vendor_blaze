@@ -1,0 +1,31 @@
+diff --git a/loader/Loader.cpp b/loader/Loader.cpp
+index 08c6b6d..0cf302d 100644
+--- a/loader/Loader.cpp
++++ b/loader/Loader.cpp
+@@ -598,12 +598,7 @@ void vendorBpfLoader() {
+     // Load all ELF objects, create programs and maps, and pin them
+     if (!android::bpf::loadAllElfObjects()) {
+         ALOGE("=== CRITICAL FAILURE LOADING BPF PROGRAMS FROM /vendor/etc/bpf ===");
+-        ALOGE("If this triggers reliably, you're probably missing kernel options or patches.");
+-        ALOGE("If this triggers randomly, you might be hitting some memory allocation "
+-              "problems or startup script race.");
+-        ALOGE("--- DO NOT EXPECT SYSTEM TO BOOT SUCCESSFULLY ---");
+-        sleep(20);
+-        exit(121);
++        ALOGE("Continuing boot on GSI despite vendor BPF load error.");
+     }
+ 
+     const char* args[] = {"/apex/com.android.tethering/bin/netbpfload", "done", NULL};
+diff --git a/loader/bpfloader.rs b/loader/bpfloader.rs
+index f23d882..2ef1331 100644
+--- a/loader/bpfloader.rs
++++ b/loader/bpfloader.rs
+@@ -330,7 +330,7 @@ const FILE_ARR: &[BpfFileDesc] = &[
+     },
+     BpfFileDesc {
+         filename: "/system/etc/bpf/bpfRingbufProg.bpf",
+-        critical: true,
++        critical: false,
+         skip_on_user: true,
+         maps: &[MapDesc::new(GID_ROOT, PERM_GRW, "test_ringbuf")],
+         progs: &[ProgDesc::new(GID_ROOT, "skfilter_ringbuf_test")],

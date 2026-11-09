@@ -1,0 +1,525 @@
+diff --git a/private/adbd.te b/private/adbd.te
+index 85ac0b5bd..5f631e3a6 100644
+--- a/private/adbd.te
++++ b/private/adbd.te
+@@ -106,6 +106,7 @@ binder_call(adbd, surfaceflinger)
+ binder_call(adbd, gpuservice)
+ # b/13188914
+ gpu_sphal_use(adbd)
++allow adbd ion_device:chr_file rw_file_perms;
+ r_dir_file(adbd, system_file)
+ 
+ # Needed for various screenshots
+diff --git a/private/app.te b/private/app.te
+index a8a3c0437..9433912d0 100644
+--- a/private/app.te
++++ b/private/app.te
+@@ -486,6 +486,7 @@ allow appdomain console_device:chr_file { read write };
+ allowxperm { appdomain -bluetooth } self:{ rawip_socket tcp_socket udp_socket }
+   ioctl { unpriv_sock_ioctls unpriv_tty_ioctls };
+ 
++allow { appdomain -isolated_app_all } ion_device:chr_file r_file_perms;
+ allow { appdomain -isolated_app_all } dmabuf_system_heap_device:chr_file r_file_perms;
+ allow { appdomain -isolated_app_all } dmabuf_system_secure_heap_device:chr_file r_file_perms;
+ 
+diff --git a/private/bootanim.te b/private/bootanim.te
+index 419b28c14..8428f0fda 100644
+--- a/private/bootanim.te
++++ b/private/bootanim.te
+@@ -45,6 +45,9 @@ allow bootanim audioserver_service:service_manager find;
+ allow bootanim surfaceflinger_service:service_manager find;
+ allow bootanim surfaceflinger:unix_stream_socket { read write };
+ 
++# Allow access to ion memory allocation device
++allow bootanim ion_device:chr_file rw_file_perms;
++
+ # Allow access to DMA-BUF system heap
+ allow bootanim dmabuf_system_heap_device:chr_file r_file_perms;
+ 
+diff --git a/private/bufferhubd.te b/private/bufferhubd.te
+index ede406bf8..1c5945f9e 100644
+--- a/private/bufferhubd.te
++++ b/private/bufferhubd.te
+@@ -10,6 +10,8 @@ pdx_client(bufferhubd, performance_client)
+ 
+ # Access the GPU.
+ gpu_sphal_use(bufferhubd)
++# Access /dev/ion
++allow bufferhubd ion_device:chr_file r_file_perms;
+ 
+ # Receive sync fence FDs from hal_omx_server. Note that hal_omx_server never directly
+ # connects to bufferhubd via PDX. Instead, a VR app acts as a bridge between
+diff --git a/private/cameraserver.te b/private/cameraserver.te
+index 21e9519bc..43c85453f 100644
+--- a/private/cameraserver.te
++++ b/private/cameraserver.te
+@@ -16,6 +16,7 @@ hal_client_domain(cameraserver, hal_camera)
+ allow cameraserver hal_camera_server:process signal;
+ hal_client_domain(cameraserver, hal_graphics_allocator)
+ 
++allow cameraserver ion_device:chr_file rw_file_perms;
+ allow cameraserver dmabuf_system_heap_device:chr_file r_file_perms;
+ 
+ # Talk with graphics composer fences
+diff --git a/private/dumpstate.te b/private/dumpstate.te
+index ff88fe935..3f1750773 100644
+--- a/private/dumpstate.te
++++ b/private/dumpstate.te
+@@ -524,6 +524,9 @@ allow dumpstate proc_zoneinfo:file r_file_perms;
+ # Create a service for talking back to system_server
+ add_service(dumpstate, dumpstate_service)
+ 
++# use /dev/ion for screen capture
++allow dumpstate ion_device:chr_file r_file_perms;
++
+ # Allow dumpstate to run top
+ allow dumpstate proc_stat:file r_file_perms;
+ 
+diff --git a/private/file_contexts b/private/file_contexts
+index 56977a1e9..6b3fa3908 100644
+--- a/private/file_contexts
++++ b/private/file_contexts
+@@ -134,6 +134,7 @@
+ /dev/hwbinder		u:object_r:hwbinder_device:s0
+ /dev/input(/.*)?	u:object_r:input_device:s0
+ /dev/iio:device[0-9]+   u:object_r:iio_device:s0
++/dev/ion		u:object_r:ion_device:s0
+ /dev/keychord   u:object_r:keychord_device:s0
+ /dev/loop-control	u:object_r:loop_control_device:s0
+ /dev/modem.*		u:object_r:radio_device:s0
+@@ -898,6 +899,19 @@
+ # efs files
+ #
+ /efs(/.*)?		u:object_r:efs_file:s0
++/cpefs(/.*)?		u:object_r:efs_file:s0
++/prism(/.*)?		u:object_r:system_file:s0
++/optics(/.*)?		u:object_r:vendor_file:s0
++/optics/configs(/.*)?	u:object_r:vendor_configs_file:s0
++/omr			u:object_r:rootfs:s0
++/spu			u:object_r:rootfs:s0
++/keyrefuge		u:object_r:rootfs:s0
++/persist		u:object_r:mnt_vendor_file:s0
++/firmware		u:object_r:rootfs:s0
++/bt_firmware		u:object_r:rootfs:s0
++/dsp			u:object_r:rootfs:s0
++/cust			u:object_r:rootfs:s0
++/metadata/dsu_logs(/.*)?	u:object_r:aconfig_storage_metadata_file:s0
+ 
+ #############################
+ # Cache files
+diff --git a/private/fingerprintd.te b/private/fingerprintd.te
+index c0f39a781..949f9ea0e 100644
+--- a/private/fingerprintd.te
++++ b/private/fingerprintd.te
+@@ -23,3 +23,5 @@ allow fingerprintd keystore:keystore2 { add_auth };
+ # For permissions checking
+ binder_call(fingerprintd, system_server);
+ allow fingerprintd permission_service:service_manager find;
++
++allow fingerprintd ion_device:chr_file r_file_perms;
+diff --git a/private/fwk_bufferhub.te b/private/fwk_bufferhub.te
+index 62792b5d8..5286f3e56 100644
+--- a/private/fwk_bufferhub.te
++++ b/private/fwk_bufferhub.te
+@@ -2,5 +2,6 @@ type fwk_bufferhub, domain, coredomain;
+ type fwk_bufferhub_exec, system_file_type, exec_type, file_type;
+ 
+ hal_client_domain(fwk_bufferhub, hal_graphics_allocator)
++allow fwk_bufferhub ion_device:chr_file r_file_perms;
+ 
+ init_daemon_domain(fwk_bufferhub)
+diff --git a/private/gatekeeperd.te b/private/gatekeeperd.te
+index 47c741726..045294f92 100644
+--- a/private/gatekeeperd.te
++++ b/private/gatekeeperd.te
+@@ -11,6 +11,7 @@ binder_use(gatekeeperd)
+ 
+ ### Rules needed when Gatekeeper HAL runs inside gatekeeperd process.
+ ### These rules should eventually be granted only when needed.
++allow gatekeeperd ion_device:chr_file r_file_perms;
+ # Load HAL implementation
+ allow gatekeeperd system_file:dir r_dir_perms;
+ ###
+diff --git a/private/gpuservice.te b/private/gpuservice.te
+index 0b7e50386..8a57e37c1 100644
+--- a/private/gpuservice.te
++++ b/private/gpuservice.te
+@@ -17,6 +17,7 @@ gpu_sphal_use(gpuservice)
+ # GPU service will need to load GPU driver, for example Vulkan driver in order
+ # to get the capability of the driver.
+ allow gpuservice same_process_hal_file:file { open read getattr execute map };
++allow gpuservice ion_device:chr_file r_file_perms;
+ get_prop(gpuservice, hwservicemanager_prop)
+ hwbinder_use(gpuservice)
+ 
+diff --git a/private/hal_audio.te b/private/hal_audio.te
+index 97bab603e..33c6b2134 100644
+--- a/private/hal_audio.te
++++ b/private/hal_audio.te
+@@ -5,6 +5,8 @@ binder_call(hal_audio_server, hal_audio_client)
+ hal_attribute_hwservice(hal_audio, hal_audio_hwservice)
+ hal_attribute_service(hal_audio, hal_audio_service)
+ 
++allow hal_audio ion_device:chr_file r_file_perms;
++
+ binder_call(hal_audio_server, servicemanager)
+ 
+ r_dir_file(hal_audio, proc)
+diff --git a/private/hal_authgraph.te b/private/hal_authgraph.te
+index 543786f58..f053cb08e 100644
+--- a/private/hal_authgraph.te
++++ b/private/hal_authgraph.te
+@@ -4,3 +4,4 @@ hal_attribute_service(hal_authgraph, hal_authgraph_service)
+ binder_call(hal_authgraph_server, servicemanager)
+ 
+ allow hal_authgraph_server tee_device:chr_file rw_file_perms;
++allow hal_authgraph_server ion_device:chr_file r_file_perms;
+diff --git a/private/hal_camera.te b/private/hal_camera.te
+index ea8d30fb5..df70ab674 100644
+--- a/private/hal_camera.te
++++ b/private/hal_camera.te
+@@ -12,6 +12,7 @@ allow hal_camera device:dir r_dir_perms;
+ allow hal_camera video_device:dir r_dir_perms;
+ allow hal_camera video_device:chr_file rw_file_perms;
+ allow hal_camera camera_device:chr_file rw_file_perms;
++allow hal_camera ion_device:chr_file rw_file_perms;
+ allow hal_camera dmabuf_system_heap_device:chr_file r_file_perms;
+ 
+ # Both the client and the server need to use the graphics allocator
+diff --git a/private/hal_cas.te b/private/hal_cas.te
+index 75d158a03..056b4c998 100644
+--- a/private/hal_cas.te
++++ b/private/hal_cas.te
+@@ -25,6 +25,8 @@ r_dir_file(hal_cas, cgroup_v2)
+ allow hal_cas cgroup_v2:dir { search write };
+ allow hal_cas cgroup_v2:file w_file_perms;
+ 
++# Allow access to ion memory allocation device
++allow hal_cas ion_device:chr_file rw_file_perms;
+ allow hal_cas hal_graphics_allocator:fd use;
+ 
+ allow hal_cas tee_device:chr_file rw_file_perms;
+diff --git a/private/hal_codec2.te b/private/hal_codec2.te
+index 63dcadce1..df36ff8f2 100644
+--- a/private/hal_codec2.te
++++ b/private/hal_codec2.te
+@@ -15,12 +15,17 @@ hal_attribute_service(hal_codec2, hal_codec2_service)
+ # Allow server access to composer sync fences
+ allow hal_codec2_server hal_graphics_composer:fd use;
+ 
++# Allow both server and client access to ion
++allow hal_codec2_server ion_device:chr_file r_file_perms;
++
+ # Allow server access to camera HAL's fences
+ allow hal_codec2_server hal_camera:fd use;
+ 
+ # Receive gralloc buffer FDs from bufferhubd.
+ allow hal_codec2_server bufferhubd:fd use;
+ 
++allow hal_codec2_client ion_device:chr_file r_file_perms;
++
+ allow { hal_codec2_client -isolated_app_all } surfaceflinger_service:service_manager find;
+ 
+ # codec2 aidl graphic buffer allocation waitable object
+diff --git a/private/hal_drm.te b/private/hal_drm.te
+index d08abe10d..d47e60005 100644
+--- a/private/hal_drm.te
++++ b/private/hal_drm.te
+@@ -34,6 +34,8 @@ allow hal_drm cgroup_v2:file w_file_perms;
+ allow hal_drm_server shell:fd use;
+ allow hal_drm_server shell:fifo_file write;
+ 
++# Allow access to ion memory allocation device
++allow { hal_drm -hal_widevine_system } ion_device:chr_file rw_file_perms;
+ allow hal_drm hal_graphics_allocator:fd use;
+ 
+ # Allow access to hidl_memory allocation service
+diff --git a/private/hal_face.te b/private/hal_face.te
+index 068c26b2d..5e4395354 100644
+--- a/private/hal_face.te
++++ b/private/hal_face.te
+@@ -7,6 +7,9 @@ hal_attribute_service(hal_face, hal_face_service)
+ 
+ binder_use(hal_face_server)
+ 
++# Allow access to the ion memory allocation device.
++allow hal_face ion_device:chr_file r_file_perms;
++
+ # Allow read/write access to the face template directory.
+ allow {hal_face -coredomain} face_vendor_data_file:file create_file_perms;
+ allow {hal_face -coredomain} face_vendor_data_file:dir rw_dir_perms;
+diff --git a/private/hal_fingerprint.te b/private/hal_fingerprint.te
+index 07a0a65dc..3295cc7fb 100644
+--- a/private/hal_fingerprint.te
++++ b/private/hal_fingerprint.te
+@@ -7,6 +7,9 @@ hal_attribute_service(hal_fingerprint, hal_fingerprint_service)
+ 
+ binder_use(hal_fingerprint_server)
+ 
++# For memory allocation
++allow hal_fingerprint ion_device:chr_file r_file_perms;
++
+ allow { hal_fingerprint -coredomain } fingerprint_vendor_data_file:file { create_file_perms };
+ allow { hal_fingerprint -coredomain } fingerprint_vendor_data_file:dir rw_dir_perms;
+ 
+diff --git a/private/hal_gatekeeper.te b/private/hal_gatekeeper.te
+index 8fa931b34..fc23e6492 100644
+--- a/private/hal_gatekeeper.te
++++ b/private/hal_gatekeeper.te
+@@ -6,3 +6,4 @@ binder_call(hal_gatekeeper_server, servicemanager)
+ 
+ # TEE access.
+ allow hal_gatekeeper tee_device:chr_file rw_file_perms;
++allow hal_gatekeeper ion_device:chr_file r_file_perms;
+diff --git a/private/hal_graphics_allocator.te b/private/hal_graphics_allocator.te
+index 72a3a97f5..8141a0509 100644
+--- a/private/hal_graphics_allocator.te
++++ b/private/hal_graphics_allocator.te
+@@ -7,6 +7,7 @@ allow hal_graphics_allocator_client hal_graphics_mapper_service:service_manager
+ allow hal_graphics_allocator_client same_process_hal_file:file { execute read open getattr map };
+ 
+ # GPU device access
++allow hal_graphics_allocator ion_device:chr_file r_file_perms;
+ allow hal_graphics_allocator dmabuf_system_heap_device:chr_file r_file_perms;
+ 
+ # Access the secure heap
+diff --git a/private/hal_graphics_composer.te b/private/hal_graphics_composer.te
+index 8fb31ad45..a4a3bfccd 100644
+--- a/private/hal_graphics_composer.te
++++ b/private/hal_graphics_composer.te
+@@ -12,6 +12,7 @@ hal_attribute_hwservice(hal_graphics_composer, hal_graphics_composer_hwservice)
+ allow hal_graphics_composer_server hal_graphics_mapper_hwservice:hwservice_manager find;
+ 
+ # GPU device access
++allow hal_graphics_composer ion_device:chr_file r_file_perms;
+ allow hal_graphics_composer dmabuf_system_heap_device:chr_file r_file_perms;
+ allow hal_graphics_composer hal_graphics_allocator:fd use;
+ 
+diff --git a/private/hal_keymaster.te b/private/hal_keymaster.te
+index 51c218f47..3e164ade9 100644
+--- a/private/hal_keymaster.te
++++ b/private/hal_keymaster.te
+@@ -4,3 +4,4 @@ binder_call(hal_keymaster_client, hal_keymaster_server)
+ hal_attribute_hwservice(hal_keymaster, hal_keymaster_hwservice)
+ 
+ allow hal_keymaster tee_device:chr_file rw_file_perms;
++allow hal_keymaster ion_device:chr_file r_file_perms;
+diff --git a/private/hal_keymint.te b/private/hal_keymint.te
+index 19b1d06bd..ea4ac4c31 100644
+--- a/private/hal_keymint.te
++++ b/private/hal_keymint.te
+@@ -6,3 +6,4 @@ hal_attribute_service(hal_keymint, hal_remotelyprovisionedcomponent_service)
+ binder_call(hal_keymint_server, servicemanager)
+ 
+ allow { hal_keymint_server -coredomain } tee_device:chr_file rw_file_perms;
++allow { hal_keymint_server -coredomain } ion_device:chr_file r_file_perms;
+diff --git a/private/hal_neuralnetworks.te b/private/hal_neuralnetworks.te
+index b0cd0a979..97200935d 100644
+--- a/private/hal_neuralnetworks.te
++++ b/private/hal_neuralnetworks.te
+@@ -15,6 +15,9 @@ allow hal_neuralnetworks_server privapp_data_file:file { read write getattr map
+ # Allow NN HAL service to use a client-provided fd residing in /data/local/tmp/.
+ allow hal_neuralnetworks_server shell_data_file:file { read write getattr map };
+ 
++# Allow NN HAL service to read a client-provided ION memory fd.
++allow hal_neuralnetworks_server ion_device:chr_file r_file_perms;
++
+ # Allow NN HAL service to use a client-provided fd residing in /storage
+ allow hal_neuralnetworks_server storage_file:file { getattr map read };
+ 
+diff --git a/private/hal_omx.te b/private/hal_omx.te
+index 4a2df081c..2611dcd30 100644
+--- a/private/hal_omx.te
++++ b/private/hal_omx.te
+@@ -7,6 +7,7 @@ binder_call(hal_omx_server, { appdomain -isolated_app })
+ # Allow hal_omx_server access to composer sync fences
+ allow hal_omx_server hal_graphics_composer:fd use;
+ 
++allow hal_omx_server ion_device:chr_file rw_file_perms;
+ allow hal_omx_server hal_camera:fd use;
+ 
+ crash_dump_fallback(hal_omx_server)
+diff --git a/private/init.te b/private/init.te
+index f1baa5b4b..e5dacd0f7 100644
+--- a/private/init.te
++++ b/private/init.te
+@@ -257,6 +257,7 @@ allow init configfs:{ file lnk_file } create_file_perms;
+ 
+ # /metadata
+ allow init metadata_file:dir mounton;
++allow init aconfig_storage_metadata_file:dir mounton;
+ 
+ # Run restorecon on /dev
+ allow init tmpfs:dir relabelfrom;
+diff --git a/private/kernel.te b/private/kernel.te
+index 45de04f00..4b240552c 100644
+--- a/private/kernel.te
++++ b/private/kernel.te
+@@ -141,6 +141,8 @@ allow kernel {
+   staging_data_file
+   vendor_apex_file
+ }:file read;
++allow kernel vendor_file_type:dir r_dir_perms;
++allow kernel vendor_file_type:file r_file_perms;
+ # Also allow the kernel to read/write /data/local/tmp files via loop device
+ # for ApexTestCases and fiemap_image_test.
+ userdebug_or_eng(`
+diff --git a/private/mediaserver.te b/private/mediaserver.te
+index b08b65e4a..c0f2790f9 100644
+--- a/private/mediaserver.te
++++ b/private/mediaserver.te
+@@ -167,6 +167,7 @@ allow mediaserver media_rw_data_file:file create_file_perms;
+ # Access to media in /data/preloads
+ allow mediaserver preloads_media_file:file { getattr read ioctl };
+ 
++allow mediaserver ion_device:chr_file r_file_perms;
+ allow mediaserver dmabuf_system_heap_device:chr_file r_file_perms;
+ allow mediaserver dmabuf_system_secure_heap_device:chr_file r_file_perms;
+ allow mediaserver hal_graphics_allocator:fd use;
+diff --git a/private/rs.te b/private/rs.te
+index 77e63d39e..c6fab4330 100644
+--- a/private/rs.te
++++ b/private/rs.te
+@@ -26,6 +26,7 @@ allow rs vendor_apex_metadata_file:dir { getattr search };
+ r_dir_file(rs, apk_data_file)
+ 
+ allow rs gpu_device:chr_file rw_file_perms;
++allow rs ion_device:chr_file r_file_perms;
+ allow rs same_process_hal_file:file { r_file_perms execute };
+ 
+ # File descriptors passed from app to renderscript
+diff --git a/private/shell.te b/private/shell.te
+index 5d3cabc39..db3cdd753 100644
+--- a/private/shell.te
++++ b/private/shell.te
+@@ -491,6 +491,9 @@ userdebug_or_eng(`
+ # Allow CTS to check whether AVF debug policy is installed
+ allow shell { proc_dt_avf sysfs_dt_avf }:dir search;
+ 
++# Allow access to ion memory allocation device.
++allow shell ion_device:chr_file rw_file_perms;
++
+ #
+ # filesystem test for insecure chr_file's is done
+ # via a host side test
+diff --git a/private/surfaceflinger.te b/private/surfaceflinger.te
+index 3ddad9ec5..929c57efc 100644
+--- a/private/surfaceflinger.te
++++ b/private/surfaceflinger.te
+@@ -124,6 +124,7 @@ r_dir_file(surfaceflinger, system_file)
+ allow surfaceflinger tmpfs:dir r_dir_perms;
+ allow surfaceflinger system_server:fd use;
+ allow surfaceflinger system_server:unix_stream_socket { read write };
++allow surfaceflinger ion_device:chr_file r_file_perms;
+ allow surfaceflinger dmabuf_system_heap_device:chr_file r_file_perms;
+ 
+ # pdx IPC
+diff --git a/private/system_server.te b/private/system_server.te
+index 355e5b9a2..767e154a9 100644
+--- a/private/system_server.te
++++ b/private/system_server.te
+@@ -253,6 +253,9 @@ no_debugfs_restriction(`
+   allow system_server debugfs_wakeup_sources:file r_file_perms;
+ ')
+ 
++# Read /sys/kernel/ion/*.
++allow system_server sysfs_ion:file r_file_perms;
++
+ # Read /sys/kernel/dma_heap/*.
+ allow system_server sysfs_dma_heap:file r_file_perms;
+ 
+@@ -1294,6 +1297,7 @@ allow system_server preloads_media_file:dir { r_dir_perms write remove_name rmdi
+ 
+ r_dir_file(system_server, cgroup)
+ r_dir_file(system_server, cgroup_v2)
++allow system_server ion_device:chr_file r_file_perms;
+ 
+ # Access to /dev/dma_heap/system
+ allow system_server dmabuf_system_heap_device:chr_file r_file_perms;
+diff --git a/private/virtual_camera.te b/private/virtual_camera.te
+index dc5eef384..0f82c8fba 100644
+--- a/private/virtual_camera.te
++++ b/private/virtual_camera.te
+@@ -39,7 +39,8 @@ hal_client_domain(virtual_camera, hal_graphics_allocator)
+ # Allow virtual_camera to use GPU
+ gpu_sphal_use(virtual_camera)
+ 
+-# DMABUF is used by vendor to allocate graphic buffers needed by virtual_camera
++# ION And DMABUF are used by vendor to allocate graphic buffers needed by virtual_camera
++allow cameraserver ion_device:chr_file rw_file_perms;
+ allow cameraserver dmabuf_system_heap_device:chr_file r_file_perms;
+ 
+ # Allow virtual camera to use graphics composer fd-s (fences).
+diff --git a/private/zygote.te b/private/zygote.te
+index 197198c10..014fe5485 100644
+--- a/private/zygote.te
++++ b/private/zygote.te
+@@ -198,6 +198,7 @@ userdebug_or_eng(`
+   allow zygote method_trace_data_file:file { create w_file_perms };
+ ')
+ 
++allow zygote ion_device:chr_file r_file_perms;
+ allow zygote tmpfs:dir r_dir_perms;
+ 
+ allow zygote same_process_hal_file:file { execute read open getattr map };
+diff --git a/vendor/hal_hwcrypto_default.te b/vendor/hal_hwcrypto_default.te
+index cf48cb2e0..7cb2eef94 100644
+--- a/vendor/hal_hwcrypto_default.te
++++ b/vendor/hal_hwcrypto_default.te
+@@ -5,6 +5,7 @@ type hal_hwcrypto_default_exec, exec_type, vendor_file_type, file_type;
+ init_daemon_domain(hal_hwcrypto_default)
+ 
+ allow hal_hwcrypto_default tee_device:chr_file rw_file_perms;
++allow hal_hwcrypto_default ion_device:chr_file rw_file_perms;
+ 
+ binder_call(hal_hwcrypto_client, hal_hwcrypto_server);
+ hal_attribute_service(hal_hwcrypto, hal_hwcrypto_service);
+diff --git a/vendor/hal_sensors_default.te b/vendor/hal_sensors_default.te
+index eb3069425..875236434 100644
+--- a/vendor/hal_sensors_default.te
++++ b/vendor/hal_sensors_default.te
+@@ -12,6 +12,7 @@ allow hal_sensors_default input_device:chr_file r_file_perms;
+ # Allow sensor hals to access and use gralloc memory allocated by
+ # android.hardware.graphics.allocator
+ allow hal_sensors_default hal_graphics_allocator_default:fd use;
++allow hal_sensors_default ion_device:chr_file r_file_perms;
+ allow hal_sensors_default dmabuf_system_heap_device:chr_file r_file_perms;
+ 
+ # allow sensor hal to use lock for keeping system awake for wake up
+diff --git a/vendor/hal_tv_tuner_default.te b/vendor/hal_tv_tuner_default.te
+index 976379b8d..5e149a674 100644
+--- a/vendor/hal_tv_tuner_default.te
++++ b/vendor/hal_tv_tuner_default.te
+@@ -4,6 +4,8 @@ hal_server_domain(hal_tv_tuner_default, hal_tv_tuner)
+ type hal_tv_tuner_default_exec, exec_type, vendor_file_type, file_type;
+ init_daemon_domain(hal_tv_tuner_default)
+ 
++allow hal_tv_tuner_default ion_device:chr_file r_file_perms;
++
+ # Access to /dev/dma_heap/system
+ allow hal_tv_tuner_default dmabuf_system_heap_device:chr_file r_file_perms;
+ 
+diff --git a/vendor/mediacodec.te b/vendor/mediacodec.te
+index 861031e0d..b241aad0c 100644
+--- a/vendor/mediacodec.te
++++ b/vendor/mediacodec.te
+@@ -17,6 +17,7 @@ hal_client_domain(mediacodec, hal_allocator)
+ hal_client_domain(mediacodec, hal_graphics_allocator)
+ 
+ gpu_sphal_use(mediacodec)
++allow mediacodec ion_device:chr_file rw_file_perms;
+ allow mediacodec dmabuf_system_heap_device:chr_file r_file_perms;
+ allow mediacodec video_device:chr_file rw_file_perms;
+ allow mediacodec video_device:dir search;
+diff --git a/vendor/tee.te b/vendor/tee.te
+index 76d2240a5..323c7e842 100644
+--- a/vendor/tee.te
++++ b/vendor/tee.te
+@@ -10,6 +10,7 @@ allow tee tee_data_file:dir create_dir_perms;
+ allow tee tee_data_file:file create_file_perms;
+ allow tee self:netlink_socket create_socket_perms_no_ioctl;
+ allow tee self:netlink_generic_socket create_socket_perms_no_ioctl;
++allow tee ion_device:chr_file r_file_perms;
+ r_dir_file(tee, sysfs_type)
+ 
+ allow tee system_data_file:file { getattr read };

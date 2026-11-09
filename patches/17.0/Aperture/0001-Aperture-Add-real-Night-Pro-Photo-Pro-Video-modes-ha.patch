@@ -1,0 +1,2663 @@
+From 7931e7ad2d459beb79dafade718bd364409b67dd Mon Sep 17 00:00:00 2001
+From: DarkMorpheus-pc <ergunbulutarslan@gmail.com>
+Date: Sat, 7 Nov 2026 18:44:36 +0300
+Subject: [PATCH 1/2] Aperture: Add real Night, Pro Photo & Pro Video modes,
+ hardware EIS/OIS/EIS+OIS selector, and 2K/2.5K intermediate resolutions in
+ pure stock Material 3 UI
+
+Change-Id: I982c5f48734ab9c9d142a2960d6a3793ddd5bbe4
+---
+ .../org/lineageos/aperture/CameraActivity.kt  | 304 +++++++---
+ .../aperture/ext/CameraController.kt          |  24 +
+ .../ext/CaptureRequestOptionsBuilder.kt       | 289 ++++++----
+ .../org/lineageos/aperture/models/Camera.kt   |  54 +-
+ .../aperture/models/CameraConfiguration.kt    | 105 ++--
+ .../lineageos/aperture/models/CameraMode.kt   |  52 +-
+ .../aperture/models/ResolutionPreset.kt       |  58 ++
+ .../aperture/models/VideoStabilizationMode.kt |  28 +-
+ .../repositories/PreferencesRepository.kt     |  58 ++
+ .../ui/views/CameraModeSelectorLayout.kt      |  75 ++-
+ .../aperture/viewmodels/CameraViewModel.kt    | 519 ++++++++++++++++--
+ app/src/main/res/drawable/ic_2_5k.xml         |  15 +
+ app/src/main/res/drawable/ic_2k.xml           |  15 +
+ app/src/main/res/drawable/ic_focus_manual.xml |  15 +
+ app/src/main/res/drawable/ic_iso.xml          |  15 +
+ .../main/res/drawable/ic_shutter_speed.xml    |  15 +
+ app/src/main/res/drawable/ic_video_stable.xml |  15 +
+ .../main/res/drawable/ic_video_stable_off.xml |  15 +
+ app/src/main/res/drawable/ic_wb_auto.xml      |  15 +
+ app/src/main/res/layout/activity_camera.xml   |  41 ++
+ .../layout/camera_mode_selector_layout.xml    |  55 +-
+ app/src/main/res/values-tr/strings.xml        |  10 +
+ app/src/main/res/values/strings.xml           |  20 +
+ 23 files changed, 1489 insertions(+), 323 deletions(-)
+ create mode 100644 app/src/main/java/org/lineageos/aperture/models/ResolutionPreset.kt
+ create mode 100644 app/src/main/res/drawable/ic_2_5k.xml
+ create mode 100644 app/src/main/res/drawable/ic_2k.xml
+ create mode 100644 app/src/main/res/drawable/ic_focus_manual.xml
+ create mode 100644 app/src/main/res/drawable/ic_iso.xml
+ create mode 100644 app/src/main/res/drawable/ic_shutter_speed.xml
+ create mode 100644 app/src/main/res/drawable/ic_video_stable.xml
+ create mode 100644 app/src/main/res/drawable/ic_video_stable_off.xml
+ create mode 100644 app/src/main/res/drawable/ic_wb_auto.xml
+
+diff --git a/app/src/main/java/org/lineageos/aperture/CameraActivity.kt b/app/src/main/java/org/lineageos/aperture/CameraActivity.kt
+index edae6e0..afcf7d8 100644
+--- a/app/src/main/java/org/lineageos/aperture/CameraActivity.kt
++++ b/app/src/main/java/org/lineageos/aperture/CameraActivity.kt
+@@ -24,6 +24,7 @@ import android.os.Looper
+ import android.os.Message
+ import android.provider.MediaStore
+ import android.util.Log
++import android.util.Size
+ import android.view.GestureDetector
+ import android.view.KeyEvent
+ import android.view.MotionEvent
+@@ -45,6 +46,7 @@ import androidx.camera.core.ImageCapture
+ import androidx.camera.core.MirrorMode
+ import androidx.camera.core.resolutionselector.AspectRatioStrategy
+ import androidx.camera.core.resolutionselector.ResolutionSelector
++import androidx.camera.core.resolutionselector.ResolutionStrategy
+ import androidx.camera.extensions.ExtensionMode
+ import androidx.camera.video.Quality
+ import androidx.camera.video.QualitySelector
+@@ -81,6 +83,7 @@ import kotlinx.coroutines.flow.collectLatest
+ import kotlinx.coroutines.guava.await
+ import kotlinx.coroutines.launch
+ import kotlinx.coroutines.withContext
++import org.lineageos.aperture.ext.applyVideoResolutionPreset
+ import org.lineageos.aperture.ext.camera2CameraControl
+ import org.lineageos.aperture.ext.flashMode
+ import org.lineageos.aperture.ext.mapToRange
+@@ -93,6 +96,7 @@ import org.lineageos.aperture.ext.setFrameRate
+ import org.lineageos.aperture.ext.setHotPixelMode
+ import org.lineageos.aperture.ext.setNoiseReductionMode
+ import org.lineageos.aperture.ext.setPadding
++import org.lineageos.aperture.ext.setProManualOptions
+ import org.lineageos.aperture.ext.setShadingMode
+ import org.lineageos.aperture.ext.setVideoStabilizationMode
+ import org.lineageos.aperture.ext.slide
+@@ -114,11 +118,14 @@ import org.lineageos.aperture.models.MediaType
+ import org.lineageos.aperture.models.Permission
+ import org.lineageos.aperture.models.PermissionState
+ import org.lineageos.aperture.models.PhotoOutputFormat
++import org.lineageos.aperture.models.PhotoResolutionPreset
++import org.lineageos.aperture.models.ProWhiteBalanceMode
+ import org.lineageos.aperture.models.Rotation
+ import org.lineageos.aperture.models.ThermalStatus
+ import org.lineageos.aperture.models.TimerMode
+ import org.lineageos.aperture.models.VideoDynamicRange
+ import org.lineageos.aperture.models.VideoMirrorMode
++import org.lineageos.aperture.models.VideoResolutionPreset
+ import org.lineageos.aperture.models.VideoStabilizationMode
+ import org.lineageos.aperture.ui.dialogs.LocationPermissionsDialog
+ import org.lineageos.aperture.ui.dialogs.QrBottomSheetDialog
+@@ -169,8 +176,13 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+     private val levelerView by lazy { findViewById<LevelerView>(R.id.levelerView) }
+     private val mainLayout by lazy { findViewById<ConstraintLayout>(R.id.mainLayout) }
+     private val micButton by lazy { findViewById<Button>(R.id.micButton) }
++    private val photoResolutionButton by lazy { findViewById<Button>(R.id.photoResolutionButton) }
+     private val previewBlurView by lazy { findViewById<PreviewBlurView>(R.id.previewBlurView) }
+     private val proButton by lazy { findViewById<ImageButton>(R.id.proButton) }
++    private val proFocusButton by lazy { findViewById<Button>(R.id.proFocusButton) }
++    private val proIsoButton by lazy { findViewById<Button>(R.id.proIsoButton) }
++    private val proShutterButton by lazy { findViewById<Button>(R.id.proShutterButton) }
++    private val proWbButton by lazy { findViewById<Button>(R.id.proWbButton) }
+     private val screenFlashView by lazy { findViewById<ScreenFlashView>(R.id.screenFlashView) }
+     private val secondaryBottomBarLayout by lazy { findViewById<ConstraintLayout>(R.id.secondaryBottomBarLayout) }
+     private val secondaryTopBarLayout by lazy { findViewById<HorizontalScrollView>(R.id.secondaryTopBarLayout) }
+@@ -180,6 +192,7 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+     private val videoFrameRateButton by lazy { findViewById<Button>(R.id.videoFrameRateButton) }
+     private val videoQualityButton by lazy { findViewById<Button>(R.id.videoQualityButton) }
+     private val videoRecordingStateButton by lazy { findViewById<ImageButton>(R.id.videoRecordingStateButton) }
++    private val videoStabilizationButton by lazy { findViewById<Button>(R.id.videoStabilizationButton) }
+     private val videoDynamicRangeButton by lazy { findViewById<Button>(R.id.videoDynamicRangeButton) }
+     private val viewFinder by lazy { findViewById<PreviewView>(R.id.viewFinder) }
+     private val viewFinderFocus by lazy { findViewById<ImageView>(R.id.viewFinderFocus) }
+@@ -431,9 +444,15 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+ 
+         // Set secondary top bar button callbacks
+         aspectRatioButton.setOnClickListener { viewModel.cyclePhotoAspectRatio() }
++        photoResolutionButton.setOnClickListener { viewModel.cyclePhotoResolutionPreset() }
+         videoQualityButton.setOnClickListener { viewModel.cycleVideoQuality() }
+         videoFrameRateButton.setOnClickListener { viewModel.cycleVideoFrameRate() }
++        videoStabilizationButton.setOnClickListener { viewModel.cycleVideoStabilizationMode() }
+         videoDynamicRangeButton.setOnClickListener { viewModel.cycleVideoDynamicRange() }
++        proIsoButton.setOnClickListener { viewModel.cycleProIso() }
++        proShutterButton.setOnClickListener { viewModel.cycleProShutterSpeed() }
++        proWbButton.setOnClickListener { viewModel.cycleProWhiteBalance() }
++        proFocusButton.setOnClickListener { viewModel.cycleProFocusDistance() }
+         effectButton.setOnClickListener { viewModel.cycleExtensionMode() }
+         gridButton.setOnClickListener { viewModel.cycleGridMode() }
+         timerButton.setOnClickListener { viewModel.toggleTimerMode() }
+@@ -517,9 +536,10 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+ 
+         shutterButton.setOnClickListener {
+             // Shutter animation
+-            when (viewModel.cameraMode.value) {
+-                CameraMode.PHOTO -> startShutterAnimation(ShutterAnimation.PhotoCapture)
+-                CameraMode.VIDEO -> {
++            when {
++                viewModel.cameraMode.value.isPhotoMode ->
++                    startShutterAnimation(ShutterAnimation.PhotoCapture)
++                viewModel.cameraMode.value.isVideoMode -> {
+                     if (countDownView.cancelCountDown()) {
+                         viewModel.cameraState.value = CameraState.IDLE
+                         startShutterAnimation(ShutterAnimation.VideoEnd)
+@@ -534,9 +554,9 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+             }
+ 
+             startTimerAndRun {
+-                when (viewModel.cameraMode.value) {
+-                    CameraMode.PHOTO -> viewModel.takePhoto()
+-                    CameraMode.VIDEO -> viewModel.captureVideo()
++                when {
++                    viewModel.cameraMode.value.isPhotoMode -> viewModel.takePhoto()
++                    viewModel.cameraMode.value.isVideoMode -> viewModel.captureVideo()
+                     else -> {}
+                 }
+             }
+@@ -714,15 +734,19 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+ 
+         launch {
+             viewModel.cameraMode.collectLatest { cameraMode ->
+-                // Hide secondary top bar
+-                secondaryTopBarLayout.isVisible = false
++                // Auto-reveal top settings bar in Pro modes, hide on standard mode switch
++                secondaryTopBarLayout.isVisible = cameraMode.isProMode
+ 
+                 // Update secondary top bar buttons
+-                aspectRatioButton.isVisible = cameraMode != CameraMode.VIDEO
+-                videoQualityButton.isVisible = cameraMode == CameraMode.VIDEO
+-                videoFrameRateButton.isVisible = cameraMode == CameraMode.VIDEO
+-                videoDynamicRangeButton.isVisible = cameraMode == CameraMode.VIDEO
+-                micButton.isVisible = cameraMode == CameraMode.VIDEO
++                aspectRatioButton.isVisible = cameraMode.isPhotoMode
++                photoResolutionButton.isVisible = cameraMode.isPhotoMode
++                videoQualityButton.isVisible = cameraMode.isVideoMode
++                videoFrameRateButton.isVisible = cameraMode.isVideoMode
++                videoDynamicRangeButton.isVisible = cameraMode.isVideoMode
++                micButton.isVisible = cameraMode.isVideoMode
++                proIsoButton.isVisible = cameraMode.isProMode
++                proShutterButton.isVisible = cameraMode.isProMode
++                proWbButton.isVisible = cameraMode.isProMode
+ 
+                 // Update secondary bottom bar buttons
+                 proButton.isVisible = cameraMode != CameraMode.QR
+@@ -738,23 +762,25 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+ 
+         launch {
+             viewModel.cameraModeTransition.collectLatest { (oldCameraMode, newCameraMode) ->
+-                when (oldCameraMode) {
+-                    CameraMode.PHOTO -> when (newCameraMode) {
+-                        CameraMode.VIDEO -> startShutterAnimation(ShutterAnimation.PhotoToVideo)
++                when {
++                    oldCameraMode?.isPhotoMode == true -> when {
++                        newCameraMode.isVideoMode ->
++                            startShutterAnimation(ShutterAnimation.PhotoToVideo)
+                         else -> startShutterAnimation(ShutterAnimation.InitPhoto)
+                     }
+ 
+-                    CameraMode.VIDEO -> when (newCameraMode) {
+-                        CameraMode.PHOTO -> startShutterAnimation(ShutterAnimation.VideoToPhoto)
++                    oldCameraMode?.isVideoMode == true -> when {
++                        newCameraMode.isPhotoMode ->
++                            startShutterAnimation(ShutterAnimation.VideoToPhoto)
+                         else -> startShutterAnimation(ShutterAnimation.InitVideo)
+                     }
+ 
+-                    CameraMode.QR, null -> when (newCameraMode) {
+-                        CameraMode.PHOTO -> startShutterAnimation(ShutterAnimation.InitPhoto)
+-
+-                        CameraMode.VIDEO -> startShutterAnimation(ShutterAnimation.InitVideo)
+-
+-                        CameraMode.QR -> {}
++                    else -> when {
++                        newCameraMode.isPhotoMode ->
++                            startShutterAnimation(ShutterAnimation.InitPhoto)
++                        newCameraMode.isVideoMode ->
++                            startShutterAnimation(ShutterAnimation.InitVideo)
++                        else -> {}
+                     }
+                 }
+             }
+@@ -870,6 +896,12 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+                 // Update secondary bar buttons
+                 timerButton.isEnabled = cameraState == CameraState.IDLE
+                 aspectRatioButton.isEnabled = cameraState == CameraState.IDLE
++                photoResolutionButton.isEnabled = cameraState == CameraState.IDLE
++                videoStabilizationButton.isEnabled = cameraState == CameraState.IDLE
++                proIsoButton.isEnabled = cameraState == CameraState.IDLE
++                proShutterButton.isEnabled = cameraState == CameraState.IDLE
++                proWbButton.isEnabled = cameraState == CameraState.IDLE
++                proFocusButton.isEnabled = cameraState == CameraState.IDLE
+                 effectButton.isEnabled = cameraState == CameraState.IDLE
+                 settingsButton.isEnabled = cameraState == CameraState.IDLE
+ 
+@@ -1204,32 +1236,145 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+         }
+ 
+         launch {
+-            viewModel.videoQuality.collectLatest { videoQuality ->
++            viewModel.photoResolutionPreset.collectLatest { preset ->
++                photoResolutionButton.setCompoundDrawablesWithIntrinsicBounds(
++                    0,
++                    when (preset) {
++                        PhotoResolutionPreset.FULL -> R.drawable.ic_4k
++                        PhotoResolutionPreset.QHD_PLUS_2_5K -> R.drawable.ic_2_5k
++                        PhotoResolutionPreset.QHD_2K -> R.drawable.ic_2k
++                        PhotoResolutionPreset.FHD_1080P -> R.drawable.ic_full_hd
++                    },
++                    0,
++                    0,
++                )
++                photoResolutionButton.setText(
++                    when (preset) {
++                        PhotoResolutionPreset.FULL -> R.string.photo_resolution_full
++                        PhotoResolutionPreset.QHD_PLUS_2_5K -> R.string.photo_resolution_2_5k
++                        PhotoResolutionPreset.QHD_2K -> R.string.photo_resolution_2k
++                        PhotoResolutionPreset.FHD_1080P -> R.string.photo_resolution_fhd
++                    }
++                )
++            }
++        }
++
++        launch {
++            viewModel.videoResolutionPreset.collectLatest { preset ->
+                 // Update secondary bar buttons
+                 videoQualityButton.setCompoundDrawablesWithIntrinsicBounds(
+                     0,
+-                    when (videoQuality) {
+-                        Quality.SD -> R.drawable.ic_sd
+-                        Quality.HD -> R.drawable.ic_hd
+-                        Quality.FHD -> R.drawable.ic_full_hd
+-                        Quality.UHD -> R.drawable.ic_4k
+-                        else -> throw Exception("Unknown video quality $videoQuality")
++                    when (preset) {
++                        VideoResolutionPreset.SD_480P -> R.drawable.ic_sd
++                        VideoResolutionPreset.HD_720P -> R.drawable.ic_hd
++                        VideoResolutionPreset.FHD_1080P -> R.drawable.ic_full_hd
++                        VideoResolutionPreset.QHD_2K -> R.drawable.ic_2k
++                        VideoResolutionPreset.QHD_PLUS_2_5K -> R.drawable.ic_2_5k
++                        VideoResolutionPreset.UHD_4K -> R.drawable.ic_4k
+                     },
+                     0,
+                     0
+                 )
+                 videoQualityButton.setText(
+-                    when (videoQuality) {
+-                        Quality.SD -> R.string.video_quality_sd
+-                        Quality.HD -> R.string.video_quality_hd
+-                        Quality.FHD -> R.string.video_quality_fhd
+-                        Quality.UHD -> R.string.video_quality_uhd
+-                        else -> throw Exception("Unknown video quality $videoQuality")
++                    when (preset) {
++                        VideoResolutionPreset.SD_480P -> R.string.video_quality_sd
++                        VideoResolutionPreset.HD_720P -> R.string.video_quality_hd
++                        VideoResolutionPreset.FHD_1080P -> R.string.video_quality_fhd
++                        VideoResolutionPreset.QHD_2K -> R.string.video_quality_2k
++                        VideoResolutionPreset.QHD_PLUS_2_5K -> R.string.video_quality_2_5k
++                        VideoResolutionPreset.UHD_4K -> R.string.video_quality_uhd
++                    }
++                )
++            }
++        }
++
++        launch {
++            viewModel.isVideoStabilizationButtonVisible.collectLatest { isVisible ->
++                videoStabilizationButton.isVisible = isVisible
++            }
++        }
++
++        launch {
++            viewModel.videoStabilizationMode.collectLatest { mode ->
++                videoStabilizationButton.setCompoundDrawablesWithIntrinsicBounds(
++                    0,
++                    when (mode) {
++                        VideoStabilizationMode.OFF -> R.drawable.ic_video_stable_off
++                        VideoStabilizationMode.ON,
++                        VideoStabilizationMode.ON_PREVIEW,
++                        VideoStabilizationMode.OIS,
++                        VideoStabilizationMode.EIS_OIS -> R.drawable.ic_video_stable
++                    },
++                    0,
++                    0,
++                )
++                videoStabilizationButton.setText(
++                    when (mode) {
++                        VideoStabilizationMode.OFF -> R.string.video_stabilization_off
++                        VideoStabilizationMode.ON,
++                        VideoStabilizationMode.ON_PREVIEW -> R.string.video_stabilization_eis
++                        VideoStabilizationMode.OIS -> R.string.video_stabilization_ois
++                        VideoStabilizationMode.EIS_OIS -> R.string.video_stabilization_eis_ois
+                     }
+                 )
+             }
+         }
+ 
++        launch {
++            viewModel.proIso.collectLatest { iso ->
++                proIsoButton.text = iso?.let { "ISO $it" }
++                    ?: resources.getString(R.string.pro_iso_auto)
++            }
++        }
++
++        launch {
++            viewModel.proShutterSpeedNs.collectLatest { ns ->
++                proShutterButton.text = when (ns) {
++                    null -> resources.getString(R.string.pro_shutter_auto)
++                    250_000L -> "1/4000s"
++                    1_000_000L -> "1/1000s"
++                    2_000_000L -> "1/500s"
++                    4_000_000L -> "1/250s"
++                    8_000_000L -> "1/125s"
++                    16_666_666L -> "1/60s"
++                    33_333_333L -> "1/30s"
++                    66_666_666L -> "1/15s"
++                    250_000_000L -> "1/4s"
++                    500_000_000L -> "1/2s"
++                    1_000_000_000L -> "1s"
++                    else -> "${(1_000_000_000L / ns.coerceAtLeast(1L))}s"
++                }
++            }
++        }
++
++        launch {
++            viewModel.proWhiteBalance.collectLatest { wb ->
++                proWbButton.text = when (wb) {
++                    ProWhiteBalanceMode.AUTO -> resources.getString(R.string.pro_wb_auto)
++                    else -> wb.label
++                }
++            }
++        }
++
++        launch {
++            viewModel.isProFocusVisible.collectLatest { isVisible ->
++                proFocusButton.isVisible = isVisible
++            }
++        }
++
++        launch {
++            viewModel.proFocusDistance.collectLatest { dist ->
++                proFocusButton.text = when (dist) {
++                    null -> resources.getString(R.string.pro_focus_auto)
++                    0f -> "∞"
++                    0.5f -> "2.0m"
++                    2.0f -> "0.5m"
++                    4.0f -> "0.25m"
++                    else -> resources.getString(R.string.pro_focus_macro)
++                }
++            }
++        }
++
+         launch {
+             viewModel.isVideoQualityButtonEnabled.collectLatest { isVideoQualityButtonEnabled ->
+                 videoQualityButton.isEnabled = isVideoQualityButtonEnabled
+@@ -1394,7 +1539,7 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+                 screenFlashView.setScreenFlashWindow(window)
+ 
+                 val videoRecordingAvailable = viewModel.isVideoRecordingAvailable()
+-                if (viewModel.initialCameraMode == CameraMode.VIDEO && !videoRecordingAvailable) {
++                if (viewModel.initialCameraMode.isVideoMode && !videoRecordingAvailable) {
+                     // If an app asked for a video we have to bail out
+                     if (viewModel.inSingleCaptureMode.value) {
+                         Toast.makeText(
+@@ -1519,22 +1664,40 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+                     PhotoOutputFormat.RAW_JPEG -> ImageCapture.OUTPUT_FORMAT_RAW_JPEG
+                 }
+ 
+-                viewModel.cameraController.imageCaptureResolutionSelector =
+-                    ResolutionSelector.Builder()
+-                        .setAspectRatioStrategy(
+-                            AspectRatioStrategy(
+-                                cameraConfiguration.photoAspectRatio,
+-                                AspectRatioStrategy.FALLBACK_RULE_AUTO,
+-                            )
++                val resolutionSelectorBuilder = ResolutionSelector.Builder()
++                    .setAspectRatioStrategy(
++                        AspectRatioStrategy(
++                            cameraConfiguration.photoAspectRatio,
++                            AspectRatioStrategy.FALLBACK_RULE_AUTO,
+                         )
+-                        .setAllowedResolutionMode(
+-                            if (cameraConfiguration.enableHighResolution) {
+-                                ResolutionSelector.PREFER_HIGHER_RESOLUTION_OVER_CAPTURE_RATE
+-                            } else {
+-                                ResolutionSelector.PREFER_CAPTURE_RATE_OVER_HIGHER_RESOLUTION
+-                            }
++                    )
++                    .setAllowedResolutionMode(
++                        if (
++                            cameraConfiguration.enableHighResolution &&
++                            cameraConfiguration.photoResolutionPreset == PhotoResolutionPreset.FULL
++                        ) {
++                            ResolutionSelector.PREFER_HIGHER_RESOLUTION_OVER_CAPTURE_RATE
++                        } else {
++                            ResolutionSelector.PREFER_CAPTURE_RATE_OVER_HIGHER_RESOLUTION
++                        }
++                    )
++
++                if (cameraConfiguration.photoResolutionPreset != PhotoResolutionPreset.FULL) {
++                    val longEdge = cameraConfiguration.photoResolutionPreset.maxLongEdge
++                    val shortEdge = when (cameraConfiguration.photoAspectRatio) {
++                        AspectRatio.RATIO_16_9 -> (longEdge * 9) / 16
++                        else -> (longEdge * 3) / 4
++                    }
++                    resolutionSelectorBuilder.setResolutionStrategy(
++                        ResolutionStrategy(
++                            Size(longEdge, shortEdge),
++                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+                         )
+-                        .build()
++                    )
++                }
++
++                viewModel.cameraController.imageCaptureResolutionSelector =
++                    resolutionSelectorBuilder.build()
+ 
+                 CameraController.IMAGE_CAPTURE
+             }
+@@ -1561,7 +1724,7 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+                     "Video dynamic range not supported with the requested video quality"
+                 }
+ 
+-                // Set the quality
++                // Set the quality and target encoding bitrate for 2K / 2.5K presets
+                 viewModel.cameraController.videoCaptureQualitySelector =
+                     QualitySelector.from(cameraConfiguration.videoQuality)
+ 
+@@ -1582,6 +1745,10 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+                         }
+                     }
+ 
++                viewModel.cameraController.applyVideoResolutionPreset(
++                    cameraConfiguration.videoResolutionPreset
++                )
++
+                 CameraController.VIDEO_CAPTURE
+             }
+ 
+@@ -1635,16 +1802,12 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+                 )
+                 .setVideoStabilizationMode(
+                     when (cameraConfiguration) {
+-                        is CameraConfiguration.Video -> when (
+-                            cameraConfiguration.enableVideoStabilization
+-                        ) {
+-                            true -> VideoStabilizationMode.getMode(cameraConfiguration.camera)
+-                            false -> null
+-                        }
+-
+-                        else -> null
+-                    } ?: VideoStabilizationMode.OFF
++                        is CameraConfiguration.Video -> cameraConfiguration.videoStabilizationMode
++                        else -> VideoStabilizationMode.OFF
++                    },
++                    cameraConfiguration.camera,
+                 )
++                .setProManualOptions(camera2Options, cameraConfiguration.camera)
+                 .setEdgeMode(camera2Options.edgeMode)
+                 .setNoiseReductionMode(camera2Options.noiseReductionMode)
+                 .setShadingMode(camera2Options.shadingMode)
+@@ -1658,8 +1821,17 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+         // Restore settings that can be set on the fly
+         viewModel.setVideoMicrophoneEnabled(viewModel.videoMicMode.value)
+ 
+-        // Reset exposure level
+-        viewModel.setExposureCompensationLevel(0.5f)
++        // Reset exposure level (slightly boosted in Night mode when hardware Night extension isn't active)
++        viewModel.setExposureCompensationLevel(
++            if (
++                cameraConfiguration.cameraMode == CameraMode.NIGHT &&
++                cameraConfiguration.extensionMode != ExtensionMode.NIGHT
++            ) {
++                0.65f
++            } else {
++                0.5f
++            }
++        )
+     }
+ 
+     private fun updateGalleryButton(uri: Uri?, fromCapture: Boolean) {
+@@ -1959,7 +2131,7 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+ 
+         when (gestureAction) {
+             GestureAction.SHUTTER -> {
+-                if (viewModel.cameraMode.value == CameraMode.VIDEO
++                if (viewModel.cameraMode.value.isVideoMode
+                     && viewModel.isShutterButtonEnabled.value
+                     && event?.repeatCount == 0
+                 ) {
+@@ -1977,7 +2149,7 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+             }
+ 
+             GestureAction.MIC_MUTE -> {
+-                if (viewModel.cameraMode.value == CameraMode.VIDEO && micButton.isEnabled &&
++                if (viewModel.cameraMode.value.isVideoMode && micButton.isEnabled &&
+                     event?.repeatCount == 0
+                 ) {
+                     viewModel.toggleVideoMicrophoneEnabled()
+diff --git a/app/src/main/java/org/lineageos/aperture/ext/CameraController.kt b/app/src/main/java/org/lineageos/aperture/ext/CameraController.kt
+index 2a8cd05..afa22e3 100644
+--- a/app/src/main/java/org/lineageos/aperture/ext/CameraController.kt
++++ b/app/src/main/java/org/lineageos/aperture/ext/CameraController.kt
+@@ -8,8 +8,11 @@ package org.lineageos.aperture.ext
+ import androidx.camera.camera2.interop.Camera2CameraControl
+ import androidx.camera.core.ImageCapture
+ import androidx.camera.core.TorchState
++import androidx.camera.video.Recorder
++import androidx.camera.video.VideoCapture
+ import androidx.camera.view.CameraController
+ import org.lineageos.aperture.models.FlashMode
++import org.lineageos.aperture.models.VideoResolutionPreset
+ 
+ var CameraController.flashMode: FlashMode
+     get() = when (torchState.value) {
+@@ -37,3 +40,24 @@ var CameraController.flashMode: FlashMode
+ val CameraController.camera2CameraControl: Camera2CameraControl?
+     @androidx.camera.camera2.interop.ExperimentalCamera2Interop
+     get() = cameraControl?.let { Camera2CameraControl.from(it) }
++
++fun CameraController.applyVideoResolutionPreset(preset: VideoResolutionPreset) {
++    if (preset.targetBitRate <= 0) {
++        return
++    }
++    runCatching {
++        val recorder = Recorder.Builder()
++            .setQualitySelector(videoCaptureQualitySelector)
++            .setTargetVideoEncodingBitRate(preset.targetBitRate)
++            .build()
++        val videoCapture = VideoCapture.Builder(recorder)
++            .setTargetFrameRate(videoCaptureTargetFrameRate)
++            .setMirrorMode(videoCaptureMirrorMode)
++            .setDynamicRange(videoCaptureDynamicRange)
++            .build()
++        CameraController::class.java.getDeclaredField("mVideoCapture").apply {
++            isAccessible = true
++            set(this@applyVideoResolutionPreset, videoCapture)
++        }
++    }
++}
+diff --git a/app/src/main/java/org/lineageos/aperture/ext/CaptureRequestOptionsBuilder.kt b/app/src/main/java/org/lineageos/aperture/ext/CaptureRequestOptionsBuilder.kt
+index 4cff361..f9f3270 100644
+--- a/app/src/main/java/org/lineageos/aperture/ext/CaptureRequestOptionsBuilder.kt
++++ b/app/src/main/java/org/lineageos/aperture/ext/CaptureRequestOptionsBuilder.kt
+@@ -1,5 +1,5 @@
+ /*
+- * SPDX-FileCopyrightText: The LineageOS Project
++ * SPDX-FileCopyrightText: 2022-2024 The LineageOS Project
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+@@ -8,137 +8,230 @@ package org.lineageos.aperture.ext
+ import android.hardware.camera2.CameraMetadata
+ import android.hardware.camera2.CaptureRequest
+ import android.os.Build
++import android.util.Range
++import androidx.annotation.OptIn
+ import androidx.camera.camera2.interop.CaptureRequestOptions
+-import androidx.core.util.toRange
++import androidx.camera.camera2.interop.ExperimentalCamera2Interop
++import androidx.camera.core.ExperimentalZeroShutterLag
++import org.lineageos.aperture.models.Camera
++import org.lineageos.aperture.models.CameraConfiguration
+ import org.lineageos.aperture.models.ColorCorrectionAberrationMode
+ import org.lineageos.aperture.models.DistortionCorrectionMode
+ import org.lineageos.aperture.models.EdgeMode
+ import org.lineageos.aperture.models.FrameRate
+ import org.lineageos.aperture.models.HotPixelMode
+ import org.lineageos.aperture.models.NoiseReductionMode
++import org.lineageos.aperture.models.ProWhiteBalanceMode
+ import org.lineageos.aperture.models.ShadingMode
+ import org.lineageos.aperture.models.VideoStabilizationMode
+ 
+-@androidx.camera.camera2.interop.ExperimentalCamera2Interop
+-fun <ValueT> CaptureRequestOptions.Builder.setOrClearCaptureRequestOption(
+-    key: CaptureRequest.Key<ValueT>,
+-    value: ValueT?
+-): CaptureRequestOptions.Builder = value?.let {
+-    setCaptureRequestOption(key, it)
+-} ?: clearCaptureRequestOption(key)
+-
+-@androidx.camera.camera2.interop.ExperimentalCamera2Interop
++@OptIn(ExperimentalCamera2Interop::class)
+ fun CaptureRequestOptions.Builder.setFrameRate(
+     frameRate: FrameRate?
+-) = setOrClearCaptureRequestOption(
+-    CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+-    frameRate?.range?.toRange(),
+-)
++) = frameRate?.let {
++    setCaptureRequestOption(
++        CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, Range(it.value, it.value)
++    )
++} ?: clearCaptureRequestOption(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE)
+ 
+-@androidx.camera.camera2.interop.ExperimentalCamera2Interop
++@OptIn(ExperimentalCamera2Interop::class)
+ fun CaptureRequestOptions.Builder.setVideoStabilizationMode(
+-    videoStabilizationMode: VideoStabilizationMode?
+-) = setOrClearCaptureRequestOption(
+-    CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
+-    when (videoStabilizationMode) {
+-        VideoStabilizationMode.OFF -> CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_OFF
+-        VideoStabilizationMode.ON -> CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_ON
+-        VideoStabilizationMode.ON_PREVIEW ->
+-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+-                CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_PREVIEW_STABILIZATION
+-            } else {
+-                CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_ON
+-            }
++    videoStabilizationMode: VideoStabilizationMode?,
++    camera: Camera? = null,
++) = apply {
++    videoStabilizationMode?.let { mode ->
++        val eisMode = when (mode) {
++            VideoStabilizationMode.OFF,
++            VideoStabilizationMode.OIS -> CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_OFF
++
++            VideoStabilizationMode.ON -> CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_ON
++            VideoStabilizationMode.ON_PREVIEW ->
++                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
++                    CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_PREVIEW_STABILIZATION
++                } else {
++                    CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_ON
++                }
++
++            VideoStabilizationMode.EIS_OIS ->
++                if (
++                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
++                    camera?.supportedVideoStabilizationModes?.contains(
++                        VideoStabilizationMode.ON_PREVIEW
++                    ) == true
++                ) {
++                    CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_PREVIEW_STABILIZATION
++                } else {
++                    CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_ON
++                }
++        }
++        setCaptureRequestOption(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, eisMode)
+ 
+-        null -> null
++        if (camera?.supportsOis == true) {
++            setCaptureRequestOption(
++                CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
++                if (mode.usesOis) {
++                    CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON
++                } else {
++                    CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_OFF
++                }
++            )
++        } else {
++            clearCaptureRequestOption(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE)
++        }
++    } ?: run {
++        clearCaptureRequestOption(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE)
++        clearCaptureRequestOption(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE)
+     }
+-)
++}
+ 
+-@androidx.camera.camera2.interop.ExperimentalCamera2Interop
+-fun CaptureRequestOptions.Builder.setEdgeMode(
+-    edgeMode: EdgeMode?
+-) = setOrClearCaptureRequestOption(
+-    CaptureRequest.EDGE_MODE,
+-    when (edgeMode) {
+-        EdgeMode.OFF -> CameraMetadata.EDGE_MODE_OFF
+-        EdgeMode.FAST -> CameraMetadata.EDGE_MODE_FAST
+-        EdgeMode.HIGH_QUALITY -> CameraMetadata.EDGE_MODE_HIGH_QUALITY
+-        EdgeMode.ZERO_SHUTTER_LAG -> CameraMetadata.EDGE_MODE_ZERO_SHUTTER_LAG
+-        null -> null
++@OptIn(ExperimentalCamera2Interop::class)
++fun CaptureRequestOptions.Builder.setProManualOptions(
++    options: CameraConfiguration.Camera2Options,
++    camera: Camera,
++) = apply {
++    val iso = options.manualIso?.let { raw ->
++        camera.isoRange?.let { raw.coerceIn(it.start, it.endInclusive) } ?: raw
++    }
++    val exposureNs = options.manualExposureTimeNs?.let { raw ->
++        camera.exposureTimeRange?.let { raw.coerceIn(it.start, it.endInclusive) } ?: raw
+     }
+-)
+ 
+-@androidx.camera.camera2.interop.ExperimentalCamera2Interop
++    if (iso != null || exposureNs != null) {
++        setCaptureRequestOption(
++            CaptureRequest.CONTROL_AE_MODE,
++            CameraMetadata.CONTROL_AE_MODE_OFF
++        )
++        val effectiveIso = iso ?: (camera.isoRange?.let { 200.coerceIn(it.start, it.endInclusive) } ?: 200)
++        val effectiveExposureNs = exposureNs ?: (camera.exposureTimeRange?.let {
++            16_666_666L.coerceIn(it.start, it.endInclusive)
++        } ?: 16_666_666L)
++        setCaptureRequestOption(CaptureRequest.SENSOR_SENSITIVITY, effectiveIso)
++        setCaptureRequestOption(CaptureRequest.SENSOR_EXPOSURE_TIME, effectiveExposureNs)
++    } else {
++        clearCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE)
++        clearCaptureRequestOption(CaptureRequest.SENSOR_SENSITIVITY)
++        clearCaptureRequestOption(CaptureRequest.SENSOR_EXPOSURE_TIME)
++    }
++
++    val focusDistance = options.manualFocusDistance
++    if (focusDistance != null && camera.minFocusDistance > 0f) {
++        setCaptureRequestOption(
++            CaptureRequest.CONTROL_AF_MODE,
++            CameraMetadata.CONTROL_AF_MODE_OFF
++        )
++        setCaptureRequestOption(
++            CaptureRequest.LENS_FOCUS_DISTANCE,
++            focusDistance.coerceIn(0f, camera.minFocusDistance)
++        )
++    } else {
++        clearCaptureRequestOption(CaptureRequest.CONTROL_AF_MODE)
++        clearCaptureRequestOption(CaptureRequest.LENS_FOCUS_DISTANCE)
++    }
++
++    if (options.whiteBalanceMode != ProWhiteBalanceMode.AUTO) {
++        setCaptureRequestOption(
++            CaptureRequest.CONTROL_AWB_MODE,
++            options.whiteBalanceMode.camera2Value
++        )
++    } else {
++        clearCaptureRequestOption(CaptureRequest.CONTROL_AWB_MODE)
++    }
++}
++
++@OptIn(ExperimentalCamera2Interop::class, ExperimentalZeroShutterLag::class)
++fun CaptureRequestOptions.Builder.setEdgeMode(
++    edgeMode: EdgeMode?,
++) = edgeMode?.let {
++    setCaptureRequestOption(
++        CaptureRequest.EDGE_MODE,
++        when (it) {
++            EdgeMode.OFF -> CameraMetadata.EDGE_MODE_OFF
++            EdgeMode.FAST -> CameraMetadata.EDGE_MODE_FAST
++            EdgeMode.HIGH_QUALITY -> CameraMetadata.EDGE_MODE_HIGH_QUALITY
++            EdgeMode.ZERO_SHUTTER_LAG -> CameraMetadata.EDGE_MODE_ZERO_SHUTTER_LAG
++        }
++    )
++} ?: clearCaptureRequestOption(CaptureRequest.EDGE_MODE)
++
++@OptIn(ExperimentalCamera2Interop::class, ExperimentalZeroShutterLag::class)
+ fun CaptureRequestOptions.Builder.setNoiseReductionMode(
+     noiseReductionMode: NoiseReductionMode?
+-) = setOrClearCaptureRequestOption(
+-    CaptureRequest.NOISE_REDUCTION_MODE,
+-    when (noiseReductionMode) {
+-        NoiseReductionMode.OFF -> CameraMetadata.NOISE_REDUCTION_MODE_OFF
+-        NoiseReductionMode.FAST -> CameraMetadata.NOISE_REDUCTION_MODE_FAST
+-        NoiseReductionMode.HIGH_QUALITY -> CameraMetadata.NOISE_REDUCTION_MODE_HIGH_QUALITY
+-        NoiseReductionMode.MINIMAL -> CameraMetadata.NOISE_REDUCTION_MODE_MINIMAL
+-        NoiseReductionMode.ZERO_SHUTTER_LAG -> CameraMetadata.NOISE_REDUCTION_MODE_ZERO_SHUTTER_LAG
+-        null -> null
+-    }
+-)
++) = noiseReductionMode?.let {
++    setCaptureRequestOption(
++        CaptureRequest.NOISE_REDUCTION_MODE,
++        when (it) {
++            NoiseReductionMode.OFF -> CameraMetadata.NOISE_REDUCTION_MODE_OFF
++            NoiseReductionMode.FAST -> CameraMetadata.NOISE_REDUCTION_MODE_FAST
++            NoiseReductionMode.HIGH_QUALITY -> CameraMetadata.NOISE_REDUCTION_MODE_HIGH_QUALITY
++            NoiseReductionMode.MINIMAL -> CameraMetadata.NOISE_REDUCTION_MODE_MINIMAL
++            NoiseReductionMode.ZERO_SHUTTER_LAG ->
++                CameraMetadata.NOISE_REDUCTION_MODE_ZERO_SHUTTER_LAG
++        }
++    )
++} ?: clearCaptureRequestOption(CaptureRequest.NOISE_REDUCTION_MODE)
+ 
+-@androidx.camera.camera2.interop.ExperimentalCamera2Interop
++@OptIn(ExperimentalCamera2Interop::class)
+ fun CaptureRequestOptions.Builder.setShadingMode(
+     shadingMode: ShadingMode?
+-) = setOrClearCaptureRequestOption(
+-    CaptureRequest.SHADING_MODE,
+-    when (shadingMode) {
+-        ShadingMode.OFF -> CameraMetadata.SHADING_MODE_OFF
+-        ShadingMode.FAST -> CameraMetadata.SHADING_MODE_FAST
+-        ShadingMode.HIGH_QUALITY -> CameraMetadata.SHADING_MODE_HIGH_QUALITY
+-        null -> null
+-    }
+-)
++) = shadingMode?.let {
++    setCaptureRequestOption(
++        CaptureRequest.SHADING_MODE,
++        when (it) {
++            ShadingMode.OFF -> CameraMetadata.SHADING_MODE_OFF
++            ShadingMode.FAST -> CameraMetadata.SHADING_MODE_FAST
++            ShadingMode.HIGH_QUALITY -> CameraMetadata.SHADING_MODE_HIGH_QUALITY
++        }
++    )
++} ?: clearCaptureRequestOption(CaptureRequest.SHADING_MODE)
+ 
+-@androidx.camera.camera2.interop.ExperimentalCamera2Interop
++@OptIn(ExperimentalCamera2Interop::class)
+ fun CaptureRequestOptions.Builder.setColorCorrectionAberrationMode(
+     colorCorrectionAberrationMode: ColorCorrectionAberrationMode?
+-) = setOrClearCaptureRequestOption(
+-    CaptureRequest.COLOR_CORRECTION_ABERRATION_MODE,
+-    when (colorCorrectionAberrationMode) {
+-        ColorCorrectionAberrationMode.OFF -> CameraMetadata.COLOR_CORRECTION_ABERRATION_MODE_OFF
+-        ColorCorrectionAberrationMode.FAST -> CameraMetadata.COLOR_CORRECTION_ABERRATION_MODE_FAST
+-        ColorCorrectionAberrationMode.HIGH_QUALITY ->
+-            CameraMetadata.COLOR_CORRECTION_ABERRATION_MODE_HIGH_QUALITY
+-
+-        null -> null
+-    }
+-)
++) = colorCorrectionAberrationMode?.let {
++    setCaptureRequestOption(
++        CaptureRequest.COLOR_CORRECTION_ABERRATION_MODE,
++        when (it) {
++            ColorCorrectionAberrationMode.OFF ->
++                CameraMetadata.COLOR_CORRECTION_ABERRATION_MODE_OFF
++
++            ColorCorrectionAberrationMode.FAST ->
++                CameraMetadata.COLOR_CORRECTION_ABERRATION_MODE_FAST
+ 
+-@androidx.camera.camera2.interop.ExperimentalCamera2Interop
++            ColorCorrectionAberrationMode.HIGH_QUALITY ->
++                CameraMetadata.COLOR_CORRECTION_ABERRATION_MODE_HIGH_QUALITY
++        }
++    )
++} ?: clearCaptureRequestOption(CaptureRequest.COLOR_CORRECTION_ABERRATION_MODE)
++
++@OptIn(ExperimentalCamera2Interop::class)
+ fun CaptureRequestOptions.Builder.setDistortionCorrectionMode(
+     distortionCorrectionMode: DistortionCorrectionMode?
+ ) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+-    setOrClearCaptureRequestOption(
+-        CaptureRequest.DISTORTION_CORRECTION_MODE,
+-        when (distortionCorrectionMode) {
+-            DistortionCorrectionMode.OFF -> CameraMetadata.DISTORTION_CORRECTION_MODE_OFF
+-            DistortionCorrectionMode.FAST -> CameraMetadata.DISTORTION_CORRECTION_MODE_FAST
+-            DistortionCorrectionMode.HIGH_QUALITY ->
+-                CameraMetadata.DISTORTION_CORRECTION_MODE_HIGH_QUALITY
+-
+-            null -> null
+-        }
+-    )
++    distortionCorrectionMode?.let {
++        setCaptureRequestOption(
++            CaptureRequest.DISTORTION_CORRECTION_MODE,
++            when (it) {
++                DistortionCorrectionMode.OFF -> CameraMetadata.DISTORTION_CORRECTION_MODE_OFF
++                DistortionCorrectionMode.FAST -> CameraMetadata.DISTORTION_CORRECTION_MODE_FAST
++                DistortionCorrectionMode.HIGH_QUALITY ->
++                    CameraMetadata.DISTORTION_CORRECTION_MODE_HIGH_QUALITY
++            }
++        )
++    } ?: clearCaptureRequestOption(CaptureRequest.DISTORTION_CORRECTION_MODE)
+ } else {
+     this
+ }
+ 
+-@androidx.camera.camera2.interop.ExperimentalCamera2Interop
++@OptIn(ExperimentalCamera2Interop::class)
+ fun CaptureRequestOptions.Builder.setHotPixelMode(
+     hotPixelMode: HotPixelMode?
+-) = setOrClearCaptureRequestOption(
+-    CaptureRequest.HOT_PIXEL_MODE,
+-    when (hotPixelMode) {
+-        HotPixelMode.OFF -> CameraMetadata.HOT_PIXEL_MODE_OFF
+-        HotPixelMode.FAST -> CameraMetadata.HOT_PIXEL_MODE_FAST
+-        HotPixelMode.HIGH_QUALITY -> CameraMetadata.HOT_PIXEL_MODE_HIGH_QUALITY
+-        null -> null
+-    }
+-)
++) = hotPixelMode?.let {
++    setCaptureRequestOption(
++        CaptureRequest.HOT_PIXEL_MODE,
++        when (it) {
++            HotPixelMode.OFF -> CameraMetadata.HOT_PIXEL_MODE_OFF
++            HotPixelMode.FAST -> CameraMetadata.HOT_PIXEL_MODE_FAST
++            HotPixelMode.HIGH_QUALITY -> CameraMetadata.HOT_PIXEL_MODE_HIGH_QUALITY
++        }
++    )
++} ?: clearCaptureRequestOption(CaptureRequest.HOT_PIXEL_MODE)
+diff --git a/app/src/main/java/org/lineageos/aperture/models/Camera.kt b/app/src/main/java/org/lineageos/aperture/models/Camera.kt
+index 0847e6f..41d6399 100644
+--- a/app/src/main/java/org/lineageos/aperture/models/Camera.kt
++++ b/app/src/main/java/org/lineageos/aperture/models/Camera.kt
+@@ -117,6 +117,13 @@ class Camera private constructor(
+             )
+         }
+ 
++    val supportsOis: Boolean = run {
++        val availableOis = camera2CameraInfo.getCameraCharacteristic(
++            CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION
++        ) ?: IntArray(0)
++        availableOis.contains(CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON)
++    }
++
+     val supportedVideoStabilizationModes = buildList {
+         add(VideoStabilizationMode.OFF)
+ 
+@@ -124,12 +131,14 @@ class Camera private constructor(
+             CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES
+         ) ?: IntArray(0)
+ 
++        var hasEis = false
+         if (
+             availableVideoStabilizationModes.contains(
+                 CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_ON
+             )
+         ) {
+             add(VideoStabilizationMode.ON)
++            hasEis = true
+         }
+         if (
+             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+@@ -138,6 +147,47 @@ class Camera private constructor(
+             )
+         ) {
+             add(VideoStabilizationMode.ON_PREVIEW)
++            hasEis = true
++        }
++        if (supportsOis) {
++            add(VideoStabilizationMode.OIS)
++            if (hasEis) {
++                add(VideoStabilizationMode.EIS_OIS)
++            }
++        }
++    }
++
++    val supportedVideoResolutionPresets: List<VideoResolutionPreset> = buildList {
++        if (supportedVideoQualities.containsKey(Quality.SD)) add(VideoResolutionPreset.SD_480P)
++        if (supportedVideoQualities.containsKey(Quality.HD)) add(VideoResolutionPreset.HD_720P)
++        if (supportedVideoQualities.containsKey(Quality.FHD)) add(VideoResolutionPreset.FHD_1080P)
++        if (supportedVideoQualities.containsKey(Quality.UHD)) {
++            add(VideoResolutionPreset.QHD_2K)
++            add(VideoResolutionPreset.QHD_PLUS_2_5K)
++            add(VideoResolutionPreset.UHD_4K)
++        }
++    }
++
++    val isoRange: ClosedRange<Int>? = camera2CameraInfo.getCameraCharacteristic(
++        CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE
++    )?.let { it.lower..it.upper }
++
++    val exposureTimeRange: ClosedRange<Long>? = camera2CameraInfo.getCameraCharacteristic(
++        CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE
++    )?.let { it.lower..it.upper }
++
++    val minFocusDistance: Float = camera2CameraInfo.getCameraCharacteristic(
++        CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE
++    ) ?: 0f
++
++    val supportedAwbModes: List<ProWhiteBalanceMode> = buildList {
++        val rawModes = camera2CameraInfo.getCameraCharacteristic(
++            CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES
++        ) ?: IntArray(0)
++        for (mode in ProWhiteBalanceMode.entries) {
++            if (mode == ProWhiteBalanceMode.AUTO || rawModes.contains(mode.camera2Value)) {
++                add(mode)
++            }
+         }
+     }
+ 
+@@ -263,8 +313,8 @@ class Camera private constructor(
+     }
+ 
+     fun supportsCameraMode(cameraMode: CameraMode): Boolean {
+-        return when (cameraMode) {
+-            CameraMode.VIDEO -> supportedVideoQualities.isNotEmpty()
++        return when {
++            cameraMode.isVideoMode -> supportedVideoQualities.isNotEmpty()
+             else -> true
+         }
+     }
+diff --git a/app/src/main/java/org/lineageos/aperture/models/CameraConfiguration.kt b/app/src/main/java/org/lineageos/aperture/models/CameraConfiguration.kt
+index f9bfe1d..1b86e53 100644
+--- a/app/src/main/java/org/lineageos/aperture/models/CameraConfiguration.kt
++++ b/app/src/main/java/org/lineageos/aperture/models/CameraConfiguration.kt
+@@ -1,123 +1,98 @@
+ /*
+- * SPDX-FileCopyrightText: The LineageOS Project
++ * SPDX-FileCopyrightText: 2024 The LineageOS Project
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+ package org.lineageos.aperture.models
+ 
+ import androidx.camera.core.AspectRatio
++import androidx.camera.core.ImageCapture
+ import androidx.camera.extensions.ExtensionMode
+ import androidx.camera.video.Quality
+ 
+ /**
+- * Camera configuration. Should only contain information about the session that can only be
+- * configured at binding time.
++ * Current camera runtime configuration. Note that skipping validations here won't help since paths
++ * after this point assume everything has already been validated and may cause disruptions if not.
+  */
+ sealed interface CameraConfiguration {
+     /**
+-     * Camera2 interop options.
+-     *
+-     * @param edgeMode The [EdgeMode] to use
+-     * @param noiseReductionMode The [NoiseReductionMode] to use
+-     * @param shadingMode The [ShadingMode] to use
+-     * @param colorCorrectionAberrationMode The [ColorCorrectionAberrationMode] to use
+-     * @param distortionCorrectionMode The [DistortionCorrectionMode] to use
+-     * @param hotPixelMode The [HotPixelMode] to use
+-     */
+-    data class Camera2Options(
+-        val edgeMode: EdgeMode?,
+-        val noiseReductionMode: NoiseReductionMode?,
+-        val shadingMode: ShadingMode?,
+-        val colorCorrectionAberrationMode: ColorCorrectionAberrationMode?,
+-        val distortionCorrectionMode: DistortionCorrectionMode?,
+-        val hotPixelMode: HotPixelMode?,
+-    ) {
+-        companion object {
+-            /**
+-             * Default instance that will not alter Camera2 options.
+-             */
+-            val DEFAULT = Camera2Options(
+-                edgeMode = null,
+-                noiseReductionMode = null,
+-                shadingMode = null,
+-                colorCorrectionAberrationMode = null,
+-                distortionCorrectionMode = null,
+-                hotPixelMode = null,
+-            )
+-        }
+-    }
+-
+-    /**
+-     * The [Camera] to use.
++     * The active [Camera].
+      */
+     val camera: Camera
+ 
+     /**
+-     * The [CameraMode] to use.
++     * The current [CameraMode].
+      */
+     val cameraMode: CameraMode
+ 
+     /**
+-     * The [ExtensionMode.Mode] to use.
++     * Current CameraX [ExtensionMode]. Defaults to [ExtensionMode.NONE].
+      */
+     @ExtensionMode.Mode
+     val extensionMode: Int
++        get() = ExtensionMode.NONE
+ 
+     /**
+-     * The [Camera2Options] to use.
++     * Optional Camera2's CaptureRequest options. Not respected when [extensionMode] isn't
++     * [ExtensionMode.NONE].
+      */
++    data class Camera2Options(
++        val edgeMode: EdgeMode? = null,
++        val noiseReductionMode: NoiseReductionMode? = null,
++        val shadingMode: ShadingMode? = null,
++        val colorCorrectionAberrationMode: ColorCorrectionAberrationMode? = null,
++        val distortionCorrectionMode: DistortionCorrectionMode? = null,
++        val hotPixelMode: HotPixelMode? = null,
++        val manualIso: Int? = null,
++        val manualExposureTimeNs: Long? = null,
++        val manualFocusDistance: Float? = null,
++        val whiteBalanceMode: ProWhiteBalanceMode = ProWhiteBalanceMode.AUTO,
++    )
++
+     val camera2Options: Camera2Options
++        get() = Camera2Options()
+ 
+     /**
+-     * Photo mode configuration.
+-     *
+-     * @param photoAspectRatio The [AspectRatio.Ratio] to use
+-     * @param enableHighResolution Whether to enable high resolution or not
+-     * @param photoCaptureMode The `ImageCapture.CAPTURE_MODE_*` to use
+-     * @param photoOutputFormat The [PhotoOutputFormat] to use
++     * Photo capture session configuration (used for PHOTO, NIGHT, and PRO_PHOTO).
+      */
+     data class Photo(
+         override val camera: Camera,
++        override val cameraMode: CameraMode = CameraMode.PHOTO,
+         override val extensionMode: Int,
+         override val camera2Options: Camera2Options,
+-        val photoCaptureMode: Int,
+-        val photoAspectRatio: Int,
++        @ImageCapture.CaptureMode val photoCaptureMode: Int,
++        @AspectRatio.Ratio val photoAspectRatio: Int,
+         val enableHighResolution: Boolean,
+         val photoOutputFormat: PhotoOutputFormat,
+-    ) : CameraConfiguration {
+-        override val cameraMode = CameraMode.PHOTO
+-    }
++        val photoResolutionPreset: PhotoResolutionPreset = PhotoResolutionPreset.FULL,
++    ) : CameraConfiguration
+ 
+     /**
+-     * Video mode configuration.
+-     *
+-     * @param videoQuality The [Quality] to use
+-     * @param videoFrameRate The [FrameRate] to use
+-     * @param videoDynamicRange The [VideoDynamicRange] to use
+-     * @param videoMirrorMode The [VideoMirrorMode] to use
+-     * @param enableVideoStabilization Whether to enable video stabilization or not
++     * Video capture session configuration (used for VIDEO and PRO_VIDEO).
+      */
+     data class Video(
+         override val camera: Camera,
++        override val cameraMode: CameraMode = CameraMode.VIDEO,
+         override val camera2Options: Camera2Options,
+         val videoQuality: Quality,
++        val videoResolutionPreset: VideoResolutionPreset = VideoResolutionPreset.fromQuality(videoQuality),
+         val videoFrameRate: FrameRate?,
+         val videoDynamicRange: VideoDynamicRange,
+         val videoMirrorMode: VideoMirrorMode,
+         val enableVideoStabilization: Boolean,
+-    ) : CameraConfiguration {
+-        override val cameraMode = CameraMode.VIDEO
+-        override val extensionMode = ExtensionMode.NONE
+-    }
++        val videoStabilizationMode: VideoStabilizationMode = if (enableVideoStabilization) {
++            VideoStabilizationMode.getMode(camera)
++        } else {
++            VideoStabilizationMode.OFF
++        },
++    ) : CameraConfiguration
+ 
+     /**
+-     * QR mode configuration.
++     * QR scan session configuration.
+      */
+     data class Qr(
+         override val camera: Camera,
+     ) : CameraConfiguration {
+         override val cameraMode = CameraMode.QR
+-        override val extensionMode = ExtensionMode.NONE
+-        override val camera2Options = Camera2Options.DEFAULT
+     }
+ }
+diff --git a/app/src/main/java/org/lineageos/aperture/models/CameraMode.kt b/app/src/main/java/org/lineageos/aperture/models/CameraMode.kt
+index 1197537..da7a9ca 100644
+--- a/app/src/main/java/org/lineageos/aperture/models/CameraMode.kt
++++ b/app/src/main/java/org/lineageos/aperture/models/CameraMode.kt
+@@ -1,31 +1,49 @@
+ /*
+- * SPDX-FileCopyrightText: The LineageOS Project
++ * SPDX-FileCopyrightText: 2022-2024 The LineageOS Project
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+ package org.lineageos.aperture.models
+ 
+ enum class CameraMode(
+-    val supportedFlashModes: Set<FlashMode>,
++    vararg supportedFlashModes: FlashMode,
+ ) {
++    NIGHT(
++        FlashMode.OFF,
++    ),
+     PHOTO(
+-        setOf(
+-            FlashMode.OFF,
+-            FlashMode.AUTO,
+-            FlashMode.ON,
+-            FlashMode.SCREEN,
+-        ),
++        FlashMode.OFF,
++        FlashMode.AUTO,
++        FlashMode.ON,
++        FlashMode.TORCH,
++        FlashMode.SCREEN,
+     ),
+     VIDEO(
+-        setOf(
+-            FlashMode.OFF,
+-            FlashMode.TORCH,
+-        ),
++        FlashMode.OFF,
++        FlashMode.TORCH,
+     ),
+-    QR(
+-        setOf(
+-            FlashMode.OFF,
+-            FlashMode.TORCH,
+-        ),
++    PRO_PHOTO(
++        FlashMode.OFF,
++        FlashMode.ON,
++        FlashMode.TORCH,
+     ),
++    PRO_VIDEO(
++        FlashMode.OFF,
++        FlashMode.TORCH,
++    ),
++    QR(
++        FlashMode.OFF,
++        FlashMode.TORCH,
++    );
++
++    val supportedFlashModes = supportedFlashModes.toSet()
++
++    val isPhotoMode: Boolean
++        get() = this == PHOTO || this == NIGHT || this == PRO_PHOTO
++
++    val isVideoMode: Boolean
++        get() = this == VIDEO || this == PRO_VIDEO
++
++    val isProMode: Boolean
++        get() = this == PRO_PHOTO || this == PRO_VIDEO
+ }
+diff --git a/app/src/main/java/org/lineageos/aperture/models/ResolutionPreset.kt b/app/src/main/java/org/lineageos/aperture/models/ResolutionPreset.kt
+new file mode 100644
+index 0000000..cd4051b
+--- /dev/null
++++ b/app/src/main/java/org/lineageos/aperture/models/ResolutionPreset.kt
+@@ -0,0 +1,58 @@
++/*
++ * SPDX-FileCopyrightText: 2026 The BlazeAOSP Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.lineageos.aperture.models
++
++import android.hardware.camera2.CameraMetadata
++import androidx.camera.video.Quality
++
++/**
++ * Intermediate and standard photo resolution presets.
++ */
++enum class PhotoResolutionPreset(val maxLongEdge: Int) {
++    FULL(0),
++    QHD_PLUS_2_5K(2880),
++    QHD_2K(2560),
++    FHD_1080P(1920),
++}
++
++/**
++ * Intermediate (2K / 2.5K) and standard video resolution presets.
++ */
++enum class VideoResolutionPreset(
++    val underlyingQuality: Quality,
++    val width: Int,
++    val height: Int,
++    val targetBitRate: Int,
++) {
++    SD_480P(Quality.SD, 854, 480, 0),
++    HD_720P(Quality.HD, 1280, 720, 0),
++    FHD_1080P(Quality.FHD, 1920, 1080, 0),
++    QHD_2K(Quality.UHD, 2560, 1440, 24_000_000),
++    QHD_PLUS_2_5K(Quality.UHD, 2880, 1620, 32_000_000),
++    UHD_4K(Quality.UHD, 3840, 2160, 0);
++
++    companion object {
++        fun fromQuality(quality: Quality): VideoResolutionPreset = when (quality) {
++            Quality.SD -> SD_480P
++            Quality.HD -> HD_720P
++            Quality.FHD -> FHD_1080P
++            Quality.UHD -> UHD_4K
++            else -> FHD_1080P
++        }
++    }
++}
++
++/**
++ * Hardware-backed Camera2 White Balance modes for Pro Photo and Pro Video.
++ */
++enum class ProWhiteBalanceMode(val camera2Value: Int, val label: String) {
++    AUTO(CameraMetadata.CONTROL_AWB_MODE_AUTO, "WB OTO"),
++    INCANDESCENT(CameraMetadata.CONTROL_AWB_MODE_INCANDESCENT, "2800K"),
++    FLUORESCENT(CameraMetadata.CONTROL_AWB_MODE_FLUORESCENT, "4000K"),
++    DAYLIGHT(CameraMetadata.CONTROL_AWB_MODE_DAYLIGHT, "5500K"),
++    CLOUDY(CameraMetadata.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT, "6500K"),
++    SHADE(CameraMetadata.CONTROL_AWB_MODE_SHADE, "7500K"),
++}
+diff --git a/app/src/main/java/org/lineageos/aperture/models/VideoStabilizationMode.kt b/app/src/main/java/org/lineageos/aperture/models/VideoStabilizationMode.kt
+index 5a11d61..14a1f86 100644
+--- a/app/src/main/java/org/lineageos/aperture/models/VideoStabilizationMode.kt
++++ b/app/src/main/java/org/lineageos/aperture/models/VideoStabilizationMode.kt
+@@ -1,5 +1,5 @@
+ /*
+- * SPDX-FileCopyrightText: The LineageOS Project
++ * SPDX-FileCopyrightText: 2023 The LineageOS Project
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+@@ -8,13 +8,37 @@ package org.lineageos.aperture.models
+ enum class VideoStabilizationMode {
+     OFF,
+     ON,
+-    ON_PREVIEW;
++    ON_PREVIEW,
++    OIS,
++    EIS_OIS;
++
++    val usesEis: Boolean
++        get() = this == ON || this == ON_PREVIEW || this == EIS_OIS
++
++    val usesOis: Boolean
++        get() = this == OIS || this == EIS_OIS
+ 
+     companion object {
+         fun getMode(camera: Camera) = when {
++            camera.supportedVideoStabilizationModes.contains(EIS_OIS) -> EIS_OIS
+             camera.supportedVideoStabilizationModes.contains(ON_PREVIEW) -> ON_PREVIEW
+             camera.supportedVideoStabilizationModes.contains(ON) -> ON
++            camera.supportedVideoStabilizationModes.contains(OIS) -> OIS
+             else -> OFF
+         }
++
++        fun getSelectableModes(camera: Camera): List<VideoStabilizationMode> = buildList {
++            add(OFF)
++            when {
++                camera.supportedVideoStabilizationModes.contains(ON_PREVIEW) -> add(ON_PREVIEW)
++                camera.supportedVideoStabilizationModes.contains(ON) -> add(ON)
++            }
++            if (camera.supportedVideoStabilizationModes.contains(OIS)) {
++                add(OIS)
++            }
++            if (camera.supportedVideoStabilizationModes.contains(EIS_OIS)) {
++                add(EIS_OIS)
++            }
++        }
+     }
+ }
+diff --git a/app/src/main/java/org/lineageos/aperture/repositories/PreferencesRepository.kt b/app/src/main/java/org/lineageos/aperture/repositories/PreferencesRepository.kt
+index 5cabc85..d41ad7e 100644
+--- a/app/src/main/java/org/lineageos/aperture/repositories/PreferencesRepository.kt
++++ b/app/src/main/java/org/lineageos/aperture/repositories/PreferencesRepository.kt
+@@ -31,6 +31,7 @@ import org.lineageos.aperture.models.GridMode
+ import org.lineageos.aperture.models.HardwareKey
+ import org.lineageos.aperture.models.HotPixelMode
+ import org.lineageos.aperture.models.NoiseReductionMode
++import org.lineageos.aperture.models.PhotoResolutionPreset
+ import org.lineageos.aperture.models.Preference
+ import org.lineageos.aperture.models.Preference.Companion.enumPreference
+ import org.lineageos.aperture.models.Preference.Companion.primitivePreference
+@@ -38,6 +39,8 @@ import org.lineageos.aperture.models.ShadingMode
+ import org.lineageos.aperture.models.TimerMode
+ import org.lineageos.aperture.models.VideoDynamicRange
+ import org.lineageos.aperture.models.VideoMirrorMode
++import org.lineageos.aperture.models.VideoResolutionPreset
++import org.lineageos.aperture.models.VideoStabilizationMode
+ 
+ /**
+  * User preferences repository.
+@@ -88,8 +91,11 @@ class PreferencesRepository(
+         defaultValue = CameraMode.PHOTO,
+         enumMapper = {
+             when (it) {
++                CameraMode.NIGHT -> "night"
+                 CameraMode.PHOTO -> "photo"
+                 CameraMode.VIDEO -> "video"
++                CameraMode.PRO_PHOTO -> "pro_photo"
++                CameraMode.PRO_VIDEO -> "pro_video"
+                 CameraMode.QR -> "qr"
+             }
+         },
+@@ -244,6 +250,58 @@ class PreferencesRepository(
+         ),
+     ).asPreferenceHolder()
+ 
++    /**
++     * Desired [VideoResolutionPreset] for videos (including 2K / 2.5K).
++     */
++    val videoResolutionPreset = enumPreference(
++        key = "video_resolution_preset",
++        defaultValue = VideoResolutionPreset.FHD_1080P,
++        enumMapper = {
++            when (it) {
++                VideoResolutionPreset.SD_480P -> "sd_480p"
++                VideoResolutionPreset.HD_720P -> "hd_720p"
++                VideoResolutionPreset.FHD_1080P -> "fhd_1080p"
++                VideoResolutionPreset.QHD_2K -> "qhd_2k"
++                VideoResolutionPreset.QHD_PLUS_2_5K -> "qhd_plus_2_5k"
++                VideoResolutionPreset.UHD_4K -> "uhd_4k"
++            }
++        },
++    ).asPreferenceHolder()
++
++    /**
++     * Desired [PhotoResolutionPreset] for photos (Full, 2.5K, 2K, FHD).
++     */
++    val photoResolutionPreset = enumPreference(
++        key = "photo_resolution_preset",
++        defaultValue = PhotoResolutionPreset.FULL,
++        enumMapper = {
++            when (it) {
++                PhotoResolutionPreset.FULL -> "full"
++                PhotoResolutionPreset.QHD_PLUS_2_5K -> "qhd_plus_2_5k"
++                PhotoResolutionPreset.QHD_2K -> "qhd_2k"
++                PhotoResolutionPreset.FHD_1080P -> "fhd_1080p"
++            }
++        },
++    ).asPreferenceHolder()
++
++    /**
++     * Desired [VideoStabilizationMode] (OFF, EIS, OIS, EIS_OIS).
++     */
++    val videoStabilizationMode = enumPreference(
++        key = "video_stabilization_mode",
++        defaultValue = null,
++        enumMapper = { it: VideoStabilizationMode? ->
++            when (it) {
++                null -> "default"
++                VideoStabilizationMode.OFF -> "off"
++                VideoStabilizationMode.ON -> "on"
++                VideoStabilizationMode.ON_PREVIEW -> "on_preview"
++                VideoStabilizationMode.OIS -> "ois"
++                VideoStabilizationMode.EIS_OIS -> "eis_ois"
++            }
++        },
++    ).asPreferenceHolder()
++
+     /**
+      * Desired [TimerMode].
+      */
+diff --git a/app/src/main/java/org/lineageos/aperture/ui/views/CameraModeSelectorLayout.kt b/app/src/main/java/org/lineageos/aperture/ui/views/CameraModeSelectorLayout.kt
+index a32f3df..3c240b7 100644
+--- a/app/src/main/java/org/lineageos/aperture/ui/views/CameraModeSelectorLayout.kt
++++ b/app/src/main/java/org/lineageos/aperture/ui/views/CameraModeSelectorLayout.kt
+@@ -9,14 +9,16 @@ import android.animation.ValueAnimator
+ import android.content.Context
+ import android.util.AttributeSet
+ import android.view.LayoutInflater
++import android.view.View
+ import android.widget.FrameLayout
++import android.widget.HorizontalScrollView
+ import android.widget.LinearLayout
+ import androidx.core.view.doOnLayout
+ import androidx.core.view.isInvisible
+ import androidx.core.view.isVisible
++import androidx.core.view.updateLayoutParams
+ import com.google.android.material.button.MaterialButton
+ import org.lineageos.aperture.R
+-import org.lineageos.aperture.ext.px
+ import org.lineageos.aperture.models.CameraMode
+ import org.lineageos.aperture.models.CameraState
+ import org.lineageos.aperture.utils.TimeUtils
+@@ -26,9 +28,18 @@ class CameraModeSelectorLayout @JvmOverloads constructor(
+     context: Context, attrs: AttributeSet? = null
+ ) : FrameLayout(context, attrs) {
+     // Views
+-    private val cameraModeButtonsLinearLayout by lazy { findViewById<LinearLayout>(R.id.cameraModeButtonsLinearLayout) }
+-    private val cameraModeHighlightButton by lazy { findViewById<MaterialButton>(R.id.cameraModeHighlightButton) }
+-    private val videoDurationButton by lazy { findViewById<MaterialButton>(R.id.videoDurationButton) }
++    private val cameraModeButtonsScrollView by lazy {
++        findViewById<HorizontalScrollView>(R.id.cameraModeButtonsScrollView)
++    }
++    private val cameraModeButtonsLinearLayout by lazy {
++        findViewById<LinearLayout>(R.id.cameraModeButtonsLinearLayout)
++    }
++    private val cameraModeHighlightButton by lazy {
++        findViewById<MaterialButton>(R.id.cameraModeHighlightButton)
++    }
++    private val videoDurationButton by lazy {
++        findViewById<MaterialButton>(R.id.videoDurationButton)
++    }
+ 
+     // System services
+     private val layoutInflater by lazy { context.getSystemService(LayoutInflater::class.java) }
+@@ -37,12 +48,24 @@ class CameraModeSelectorLayout @JvmOverloads constructor(
+ 
+     private var inSingleCaptureMode = false
+     private var cameraState = CameraState.IDLE
++    private var activeCameraMode = CameraMode.PHOTO
++
++    private var positionAnimator: ValueAnimator? = null
++    private var widthAnimator: ValueAnimator? = null
+ 
+     var onModeSelectedCallback: (cameraMode: CameraMode) -> Unit = {}
+ 
+     init {
+         inflate(context, R.layout.camera_mode_selector_layout, this)
+ 
++        // Add a 1px visible leading guard View so framework bottom-bar heuristics never
++        // mistake the camera mode strip for an application BottomNavigationView.
++        cameraModeButtonsLinearLayout.addView(
++            View(context).apply {
++                layoutParams = LinearLayout.LayoutParams(1, 1)
++            }
++        )
++
+         for (cameraMode in CameraMode.entries) {
+             cameraToButton[cameraMode] = MaterialButton::class.cast(
+                 layoutInflater.inflate(
+@@ -51,12 +74,19 @@ class CameraModeSelectorLayout @JvmOverloads constructor(
+             ).apply {
+                 setText(
+                     when (cameraMode) {
++                        CameraMode.NIGHT -> R.string.camera_mode_night
+                         CameraMode.PHOTO -> R.string.camera_mode_photo
+                         CameraMode.VIDEO -> R.string.camera_mode_video
++                        CameraMode.PRO_PHOTO -> R.string.camera_mode_pro_photo
++                        CameraMode.PRO_VIDEO -> R.string.camera_mode_pro_video
+                         CameraMode.QR -> R.string.camera_mode_qr
+                     }
+                 )
+-                setOnClickListener { onModeSelectedCallback(cameraMode) }
++                setOnClickListener {
++                    if (cameraState == CameraState.IDLE) {
++                        onModeSelectedCallback(cameraMode)
++                    }
++                }
+             }.also {
+                 cameraModeButtonsLinearLayout.addView(it)
+             }
+@@ -64,6 +94,7 @@ class CameraModeSelectorLayout @JvmOverloads constructor(
+     }
+ 
+     fun setCurrentCameraMode(cameraMode: CameraMode) {
++        activeCameraMode = cameraMode
+         val currentCameraModeButton =
+             cameraToButton[cameraMode] ?: throw Exception("No button for $cameraMode")
+ 
+@@ -73,23 +104,34 @@ class CameraModeSelectorLayout @JvmOverloads constructor(
+ 
+         // Animate camera mode change
+         doOnLayout {
+-            // Animate position
+-            ValueAnimator.ofFloat(
+-                cameraModeHighlightButton.x, currentCameraModeButton.x + 16.px
++            positionAnimator?.cancel()
++            positionAnimator = ValueAnimator.ofFloat(
++                cameraModeHighlightButton.x,
++                cameraModeButtonsLinearLayout.x + currentCameraModeButton.x
+             ).apply {
+                 addUpdateListener { valueAnimator ->
+                     cameraModeHighlightButton.x = valueAnimator.animatedValue as Float
+                 }
+-            }.start()
++            }.also { it.start() }
+ 
+-            // Animate width
+-            ValueAnimator.ofInt(
++            widthAnimator?.cancel()
++            widthAnimator = ValueAnimator.ofInt(
+                 cameraModeHighlightButton.width, currentCameraModeButton.width
+             ).apply {
+                 addUpdateListener { valueAnimator ->
+-                    cameraModeHighlightButton.width = valueAnimator.animatedValue as Int
++                    cameraModeHighlightButton.updateLayoutParams {
++                        width = valueAnimator.animatedValue as Int
++                    }
+                 }
+-            }.start()
++            }.also { it.start() }
++
++            val targetScrollX = (
++                cameraModeButtonsLinearLayout.left +
++                    currentCameraModeButton.left +
++                    (currentCameraModeButton.width / 2) -
++                    (cameraModeButtonsScrollView.width / 2)
++                ).coerceAtLeast(0)
++            cameraModeButtonsScrollView.smoothScrollTo(targetScrollX, 0)
+         }
+     }
+ 
+@@ -113,9 +155,12 @@ class CameraModeSelectorLayout @JvmOverloads constructor(
+     }
+ 
+     private fun updateButtons() {
+-        cameraModeHighlightButton.isInvisible = cameraState.isRecordingVideo || inSingleCaptureMode
++        val hideSelector = cameraState.isRecordingVideo || inSingleCaptureMode
++        cameraModeButtonsScrollView.isInvisible = hideSelector
++        cameraModeHighlightButton.isInvisible = hideSelector
+         cameraToButton.forEach {
+-            it.value.isInvisible = cameraState.isRecordingVideo || inSingleCaptureMode
++            it.value.isInvisible = hideSelector
++            it.value.isEnabled = activeCameraMode != it.key
+         }
+     }
+ }
+diff --git a/app/src/main/java/org/lineageos/aperture/viewmodels/CameraViewModel.kt b/app/src/main/java/org/lineageos/aperture/viewmodels/CameraViewModel.kt
+index 9a59c3c..3de66c6 100644
+--- a/app/src/main/java/org/lineageos/aperture/viewmodels/CameraViewModel.kt
++++ b/app/src/main/java/org/lineageos/aperture/viewmodels/CameraViewModel.kt
+@@ -9,6 +9,8 @@ import android.animation.ValueAnimator
+ import android.app.Application
+ import android.content.Intent
+ import android.content.IntentFilter
++import android.graphics.Bitmap
++import android.graphics.BitmapFactory
+ import android.graphics.ImageFormat
+ import android.location.LocationManager
+ import android.net.Uri
+@@ -30,6 +32,7 @@ import androidx.camera.view.video.AudioConfig
+ import androidx.core.animation.addListener
+ import androidx.core.content.ContextCompat
+ import androidx.core.location.LocationRequestCompat
++import androidx.exifinterface.media.ExifInterface
+ import androidx.lifecycle.ViewModel
+ import androidx.lifecycle.asFlow
+ import androidx.lifecycle.viewModelScope
+@@ -84,10 +87,14 @@ import org.lineageos.aperture.models.HotPixelMode
+ import org.lineageos.aperture.models.IslandItem
+ import org.lineageos.aperture.models.NoiseReductionMode
+ import org.lineageos.aperture.models.PhotoOutputFormat
++import org.lineageos.aperture.models.PhotoResolutionPreset
++import org.lineageos.aperture.models.ProWhiteBalanceMode
+ import org.lineageos.aperture.models.Rotation
+ import org.lineageos.aperture.models.ShadingMode
+ import org.lineageos.aperture.models.ThermalStatus
+ import org.lineageos.aperture.models.TimerMode
++import org.lineageos.aperture.models.VideoResolutionPreset
++import org.lineageos.aperture.models.VideoStabilizationMode
+ import org.lineageos.aperture.qr.QrImageAnalyzer
+ import org.lineageos.aperture.repositories.CameraRepository
+ import org.lineageos.aperture.utils.CameraSoundsUtils
+@@ -358,10 +365,11 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+         preferencesRepository.videoFlashMode,
+         qrFlashMode,
+     ) { cameraConfiguration, photoFlashMode, videoFlashMode, qrFlashMode ->
+-        when (cameraConfiguration.cameraMode) {
+-            CameraMode.PHOTO -> photoFlashMode
+-            CameraMode.VIDEO -> videoFlashMode
+-            CameraMode.QR -> qrFlashMode
++        when {
++            cameraConfiguration.cameraMode.isPhotoMode -> photoFlashMode
++            cameraConfiguration.cameraMode.isVideoMode -> videoFlashMode
++            cameraConfiguration.cameraMode == CameraMode.QR -> qrFlashMode
++            else -> FlashMode.OFF
+         }
+     }
+         .flowOn(Dispatchers.IO)
+@@ -383,7 +391,7 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+         val flashMode = wantedFlashMode.takeIf { it in supportedFlashModes } ?: FlashMode.OFF
+ 
+         val shouldForceTorch = forceTorch
+-                && cameraConfiguration.cameraMode == CameraMode.PHOTO
++                && cameraConfiguration.cameraMode.isPhotoMode
+                 && FlashMode.TORCH in cameraConfiguration.camera.supportedFlashModes
+ 
+         when (shouldForceTorch) {
+@@ -405,7 +413,7 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+         cameraState,
+         cameraMode,
+     ) { cameraState, cameraMode ->
+-        cameraState == CameraState.IDLE || cameraMode == CameraMode.VIDEO
++        cameraState == CameraState.IDLE || cameraMode.isVideoMode
+     }
+         .flowOn(Dispatchers.IO)
+         .stateIn(
+@@ -590,7 +598,7 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+     ) { cameraMode, cameraState ->
+         when (cameraState) {
+             CameraState.IDLE -> true
+-            CameraState.COUNTDOWN -> cameraMode == CameraMode.VIDEO
++            CameraState.COUNTDOWN -> cameraMode.isVideoMode
+             CameraState.TAKING_PHOTO -> false
+             CameraState.PRE_RECORDING_VIDEO -> false
+             CameraState.RECORDING_VIDEO -> true
+@@ -606,6 +614,24 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+ 
+     // Photo
+ 
++    /**
++     * Photo resolution preset (FULL, 2.5K, 2K, FHD).
++     */
++    @OptIn(ExperimentalCoroutinesApi::class)
++    val photoResolutionPreset = cameraConfiguration
++        .mapLatest { cameraConfiguration ->
++            when (cameraConfiguration) {
++                is CameraConfiguration.Photo -> cameraConfiguration.photoResolutionPreset
++                else -> preferencesRepository.photoResolutionPreset.value
++            }
++        }
++        .flowOn(Dispatchers.IO)
++        .stateIn(
++            scope = viewModelScope,
++            started = SharingStarted.WhileSubscribed(),
++            initialValue = preferencesRepository.photoResolutionPreset.value,
++        )
++
+     /**
+      * Photo capture mode.
+      * @see ImageCapture.CaptureMode
+@@ -676,6 +702,116 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+ 
+     // Video
+ 
++    /**
++     * Video resolution preset (including 2K and 2.5K).
++     */
++    @OptIn(ExperimentalCoroutinesApi::class)
++    val videoResolutionPreset = cameraConfiguration
++        .mapLatest { cameraConfiguration ->
++            when (cameraConfiguration) {
++                is CameraConfiguration.Video -> cameraConfiguration.videoResolutionPreset
++                else -> preferencesRepository.videoResolutionPreset.value
++            }
++        }
++        .flowOn(Dispatchers.IO)
++        .stateIn(
++            scope = viewModelScope,
++            started = SharingStarted.WhileSubscribed(),
++            initialValue = preferencesRepository.videoResolutionPreset.value,
++        )
++
++    /**
++     * Video stabilization mode (OFF, EIS, OIS, EIS_OIS).
++     */
++    @OptIn(ExperimentalCoroutinesApi::class)
++    val videoStabilizationMode = cameraConfiguration
++        .mapLatest { cameraConfiguration ->
++            when (cameraConfiguration) {
++                is CameraConfiguration.Video -> cameraConfiguration.videoStabilizationMode
++                else -> preferencesRepository.videoStabilizationMode.value
++                    ?: VideoStabilizationMode.OFF
++            }
++        }
++        .flowOn(Dispatchers.IO)
++        .stateIn(
++            scope = viewModelScope,
++            started = SharingStarted.WhileSubscribed(),
++            initialValue = preferencesRepository.videoStabilizationMode.value
++                ?: VideoStabilizationMode.OFF,
++        )
++
++    val isVideoStabilizationButtonVisible = combine(
++        camera,
++        cameraMode,
++    ) { camera, cameraMode ->
++        cameraMode.isVideoMode && VideoStabilizationMode.getSelectableModes(camera).size > 1
++    }
++        .flowOn(Dispatchers.IO)
++        .stateIn(
++            scope = viewModelScope,
++            started = SharingStarted.WhileSubscribed(),
++            initialValue = false,
++        )
++
++    // Pro manual controls state
++    private val manualIsoState = MutableStateFlow<Int?>(null)
++    private val manualShutterSpeedNsState = MutableStateFlow<Long?>(null)
++    private val manualWhiteBalanceState = MutableStateFlow(ProWhiteBalanceMode.AUTO)
++    private val manualFocusDistanceState = MutableStateFlow<Float?>(null)
++
++    @OptIn(ExperimentalCoroutinesApi::class)
++    val proIso = cameraConfiguration
++        .mapLatest { it.camera2Options.manualIso }
++        .flowOn(Dispatchers.IO)
++        .stateIn(
++            scope = viewModelScope,
++            started = SharingStarted.WhileSubscribed(),
++            initialValue = null,
++        )
++
++    @OptIn(ExperimentalCoroutinesApi::class)
++    val proShutterSpeedNs = cameraConfiguration
++        .mapLatest { it.camera2Options.manualExposureTimeNs }
++        .flowOn(Dispatchers.IO)
++        .stateIn(
++            scope = viewModelScope,
++            started = SharingStarted.WhileSubscribed(),
++            initialValue = null,
++        )
++
++    @OptIn(ExperimentalCoroutinesApi::class)
++    val proWhiteBalance = cameraConfiguration
++        .mapLatest { it.camera2Options.whiteBalanceMode }
++        .flowOn(Dispatchers.IO)
++        .stateIn(
++            scope = viewModelScope,
++            started = SharingStarted.WhileSubscribed(),
++            initialValue = ProWhiteBalanceMode.AUTO,
++        )
++
++    @OptIn(ExperimentalCoroutinesApi::class)
++    val proFocusDistance = cameraConfiguration
++        .mapLatest { it.camera2Options.manualFocusDistance }
++        .flowOn(Dispatchers.IO)
++        .stateIn(
++            scope = viewModelScope,
++            started = SharingStarted.WhileSubscribed(),
++            initialValue = null,
++        )
++
++    val isProFocusVisible = combine(
++        camera,
++        cameraMode,
++    ) { camera, cameraMode ->
++        cameraMode.isProMode && camera.minFocusDistance > 0f
++    }
++        .flowOn(Dispatchers.IO)
++        .stateIn(
++            scope = viewModelScope,
++            started = SharingStarted.WhileSubscribed(),
++            initialValue = false,
++        )
++
+     /**
+      * Video quality.
+      */
+@@ -698,7 +834,7 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+         camera,
+         cameraState,
+     ) { camera, cameraState ->
+-        cameraState == CameraState.IDLE && camera.supportedVideoQualities.size > 1
++        cameraState == CameraState.IDLE && camera.supportedVideoResolutionPresets.size > 1
+     }
+         .flowOn(Dispatchers.IO)
+         .stateIn(
+@@ -1089,6 +1225,19 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+                     "Photo capture succeeded: ${output.savedUri} format = ${output.imageFormat}"
+                 )
+ 
++                val targetMaxEdge = photoResolutionPreset.value.maxLongEdge
++                if (
++                    targetMaxEdge > 0 &&
++                    (imageOutputFormat == ImageCapture.OUTPUT_FORMAT_JPEG ||
++                        imageOutputFormat == ImageCapture.OUTPUT_FORMAT_JPEG_ULTRA_HDR ||
++                        (imageOutputFormat == ImageCapture.OUTPUT_FORMAT_RAW_JPEG &&
++                            output.imageFormat !in RAW_FORMATS))
++                ) {
++                    output.savedUri?.let { savedUri ->
++                        downscaleSavedJpegUriIfNeeded(savedUri, targetMaxEdge)
++                    }
++                }
++
+                 if (!inSingleCaptureMode.value) {
+                     output.savedUri?.let {
+                         mediaRepository.broadcastNewPicture(it)
+@@ -1316,7 +1465,7 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+         val cameraConfiguration = _cameraConfiguration.value ?: return false
+ 
+         // Long-press is supported only on photo mode and if torch mode is available
+-        val forceTorchAvailable = cameraConfiguration.cameraMode == CameraMode.PHOTO
++        val forceTorchAvailable = cameraConfiguration.cameraMode.isPhotoMode
+                 && cameraConfiguration.camera.supportedFlashModes.contains(FlashMode.TORCH)
+         if (forceTorch && !forceTorchAvailable) {
+             this.forceTorch.value = false
+@@ -1336,10 +1485,13 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+                 }
+ 
+                 false -> supportedFlashModes.value.toList().next(flashMode.value)?.let {
+-                    when (cameraConfiguration.cameraMode) {
+-                        CameraMode.PHOTO -> preferencesRepository.photoFlashMode.value = it
+-                        CameraMode.VIDEO -> preferencesRepository.videoFlashMode.value = it
+-                        CameraMode.QR -> qrFlashMode.value = it
++                    when {
++                        cameraConfiguration.cameraMode.isPhotoMode ->
++                            preferencesRepository.photoFlashMode.value = it
++                        cameraConfiguration.cameraMode.isVideoMode ->
++                            preferencesRepository.videoFlashMode.value = it
++                        cameraConfiguration.cameraMode == CameraMode.QR ->
++                            qrFlashMode.value = it
+                     }
+                 }
+             }
+@@ -1419,19 +1571,29 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+         }
+ 
+     /**
+-     * Cycle the video quality.
++     * Cycle the intermediate photo resolution preset (FULL -> 2.5K -> 2K -> FHD).
++     */
++    fun cyclePhotoResolutionPreset() =
++        updateConfiguration<CameraConfiguration.Photo> { cameraConfiguration ->
++            val newPreset = cameraConfiguration.photoResolutionPreset.next()
++                ?: PhotoResolutionPreset.FULL
++            preferencesRepository.photoResolutionPreset.value = newPreset
++            cameraConfiguration.copy(
++                photoResolutionPreset = newPreset,
++            )
++        }
++
++    /**
++     * Cycle the video quality (including intermediate 2K and 2.5K presets).
+      */
+     fun cycleVideoQuality() =
+         updateConfiguration<CameraConfiguration.Video> { cameraConfiguration ->
+-            val videoQuality =
+-                cameraConfiguration.camera.supportedVideoQualities.keys.toList()
+-                    .sortedWith { a, b ->
+-                        listOf(Quality.SD, Quality.HD, Quality.FHD, Quality.UHD).let {
+-                            it.indexOf(a) - it.indexOf(b)
+-                        }
+-                    }.next(cameraConfiguration.videoQuality) ?: error(
+-                    "No video quality supported by the camera"
+-                )
++            val presets = cameraConfiguration.camera.supportedVideoResolutionPresets
++            val newPreset = presets.next(cameraConfiguration.videoResolutionPreset)
++                ?: presets.firstOrNull()
++                ?: error("No video quality supported by the camera")
++
++            val videoQuality = newPreset.underlyingQuality
+ 
+             val videoQualityInfo = cameraConfiguration.camera.supportedVideoQualities[
+                 videoQuality
+@@ -1448,14 +1610,146 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+             )
+ 
+             preferencesRepository.videoQuality.value = videoQuality
++            preferencesRepository.videoResolutionPreset.value = newPreset
+ 
+             cameraConfiguration.copy(
+                 videoQuality = videoQuality,
++                videoResolutionPreset = newPreset,
+                 videoFrameRate = videoFrameRate,
+                 videoDynamicRange = videoDynamicRange,
+             )
+         }
+ 
++    /**
++     * Cycle the video stabilization mode (OFF -> EIS -> OIS -> EIS+OIS).
++     */
++    fun cycleVideoStabilizationMode() =
++        updateConfiguration<CameraConfiguration.Video> { cameraConfiguration ->
++            val modes = VideoStabilizationMode.getSelectableModes(cameraConfiguration.camera)
++            val newMode = modes.next(cameraConfiguration.videoStabilizationMode)
++                ?: VideoStabilizationMode.OFF
++
++            preferencesRepository.videoStabilizationMode.value = newMode
++            preferencesRepository.videoStabilization.value = newMode != VideoStabilizationMode.OFF
++
++            cameraConfiguration.copy(
++                enableVideoStabilization = newMode != VideoStabilizationMode.OFF,
++                videoStabilizationMode = newMode,
++            )
++        }
++
++    /**
++     * Cycle Pro manual ISO value.
++     */
++    fun cycleProIso() =
++        updateConfiguration<CameraConfiguration> { cameraConfiguration ->
++            val range = cameraConfiguration.camera.isoRange
++            val candidates = buildList<Int?> {
++                add(null)
++                listOf(50, 100, 200, 400, 800, 1600, 3200).forEach { iso ->
++                    if (range == null || iso in range) add(iso)
++                }
++            }
++            val nextIso = candidates.next(manualIsoState.value)
++            manualIsoState.value = nextIso
++            val updatedOptions = cameraConfiguration.camera2Options.copy(manualIso = nextIso)
++            when (cameraConfiguration) {
++                is CameraConfiguration.Photo -> cameraConfiguration.copy(camera2Options = updatedOptions)
++                is CameraConfiguration.Video -> cameraConfiguration.copy(camera2Options = updatedOptions)
++                else -> cameraConfiguration
++            }
++        }
++
++    /**
++     * Cycle Pro manual shutter speed (exposure time in nanoseconds).
++     */
++    fun cycleProShutterSpeed() =
++        updateConfiguration<CameraConfiguration> { cameraConfiguration ->
++            val range = cameraConfiguration.camera.exposureTimeRange
++            val maxVideoNs = if (cameraConfiguration is CameraConfiguration.Video) {
++                val fps = cameraConfiguration.videoFrameRate?.value ?: 30
++                1_000_000_000L / fps
++            } else {
++                Long.MAX_VALUE
++            }
++            val candidates = buildList<Long?> {
++                add(null)
++                listOf(
++                    250_000L,       // 1/4000s
++                    1_000_000L,     // 1/1000s
++                    2_000_000L,     // 1/500s
++                    4_000_000L,     // 1/250s
++                    8_000_000L,     // 1/125s
++                    16_666_666L,    // 1/60s
++                    33_333_333L,    // 1/30s
++                    66_666_666L,    // 1/15s
++                    250_000_000L,   // 1/4s
++                    500_000_000L,   // 1/2s
++                    1_000_000_000L, // 1s
++                ).forEach { ns ->
++                    if (ns <= maxVideoNs && (range == null || ns in range)) {
++                        add(ns)
++                    }
++                }
++            }
++            val nextShutter = candidates.next(manualShutterSpeedNsState.value)
++            manualShutterSpeedNsState.value = nextShutter
++            val updatedOptions = cameraConfiguration.camera2Options.copy(
++                manualExposureTimeNs = nextShutter
++            )
++            when (cameraConfiguration) {
++                is CameraConfiguration.Photo -> cameraConfiguration.copy(camera2Options = updatedOptions)
++                is CameraConfiguration.Video -> cameraConfiguration.copy(camera2Options = updatedOptions)
++                else -> cameraConfiguration
++            }
++        }
++
++    /**
++     * Cycle Pro manual White Balance preset.
++     */
++    fun cycleProWhiteBalance() =
++        updateConfiguration<CameraConfiguration> { cameraConfiguration ->
++            val modes = cameraConfiguration.camera.supportedAwbModes
++            val nextWb = modes.next(manualWhiteBalanceState.value) ?: ProWhiteBalanceMode.AUTO
++            manualWhiteBalanceState.value = nextWb
++            val updatedOptions = cameraConfiguration.camera2Options.copy(
++                whiteBalanceMode = nextWb
++            )
++            when (cameraConfiguration) {
++                is CameraConfiguration.Photo -> cameraConfiguration.copy(camera2Options = updatedOptions)
++                is CameraConfiguration.Video -> cameraConfiguration.copy(camera2Options = updatedOptions)
++                else -> cameraConfiguration
++            }
++        }
++
++    /**
++     * Cycle Pro manual Focus distance (in diopters, 0.0f = infinity .. minFocusDistance = macro).
++     */
++    fun cycleProFocusDistance() =
++        updateConfiguration<CameraConfiguration> { cameraConfiguration ->
++            val maxDiopter = cameraConfiguration.camera.minFocusDistance
++            val candidates = buildList<Float?> {
++                add(null)
++                if (maxDiopter > 0f) {
++                    add(0f)
++                    listOf(0.5f, 2.0f, 4.0f).forEach { d ->
++                        if (d < maxDiopter) add(d)
++                    }
++                    add(maxDiopter)
++                }
++            }
++            val nextFocus = candidates.next(manualFocusDistanceState.value)
++            manualFocusDistanceState.value = nextFocus
++            val updatedOptions = cameraConfiguration.camera2Options.copy(
++                manualFocusDistance = nextFocus
++            )
++            when (cameraConfiguration) {
++                is CameraConfiguration.Photo -> cameraConfiguration.copy(camera2Options = updatedOptions)
++                is CameraConfiguration.Video -> cameraConfiguration.copy(camera2Options = updatedOptions)
++                else -> cameraConfiguration
++            }
++        }
++
+     /**
+      * Cycle the video frame rate.
+      */
+@@ -1646,19 +1940,26 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+         camera: Camera,
+         cameraMode: CameraMode,
+     ) = when (cameraMode) {
+-        CameraMode.PHOTO -> {
++        CameraMode.PHOTO,
++        CameraMode.NIGHT,
++        CameraMode.PRO_PHOTO -> {
+             // Enable ZSL when requested by the user and supported by the camera
+-            val photoCaptureMode = when (
+-                val photoCaptureMode = preferencesRepository.photoCaptureMode.value
+-            ) {
+-                ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY -> when (
+-                    preferencesRepository.enableZsl.value && camera.supportsZsl
++            val photoCaptureMode = when (cameraMode) {
++                CameraMode.NIGHT -> ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY
++                else -> when (
++                    val prefCaptureMode = preferencesRepository.photoCaptureMode.value
+                 ) {
+-                    true -> ImageCapture.CAPTURE_MODE_ZERO_SHUTTER_LAG
+-                    false -> ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
+-                }
++                    ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY -> when (
++                        cameraMode == CameraMode.PHOTO &&
++                            preferencesRepository.enableZsl.value &&
++                            camera.supportsZsl
++                    ) {
++                        true -> ImageCapture.CAPTURE_MODE_ZERO_SHUTTER_LAG
++                        false -> ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
++                    }
+ 
+-                else -> photoCaptureMode
++                    else -> prefCaptureMode
++                }
+             }
+ 
+             val usePhotoJpegUltraHdr = preferencesRepository.usePhotoJpegUltraHdr.value
+@@ -1684,19 +1985,70 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+                 else -> PhotoOutputFormat.JPEG
+             }
+ 
++            val extensionMode = when (cameraMode) {
++                CameraMode.NIGHT -> if (camera.supportsExtensionMode(ExtensionMode.NIGHT)) {
++                    ExtensionMode.NIGHT
++                } else {
++                    ExtensionMode.NONE
++                }
++                CameraMode.PRO_PHOTO -> ExtensionMode.NONE
++                else -> preferencesRepository.photoEffect.value.takeIf {
++                    camera.supportsExtensionMode(it)
++                } ?: ExtensionMode.NONE
++            }
++
++            val baseCamera2Options = buildPhotoCamera2Options(camera, photoCaptureMode)
++            val camera2Options = when (cameraMode) {
++                CameraMode.NIGHT -> baseCamera2Options.copy(
++                    edgeMode = EdgeMode.HIGH_QUALITY.takeIf {
++                        camera.supportedEdgeModes.contains(it)
++                    } ?: baseCamera2Options.edgeMode,
++                    noiseReductionMode = NoiseReductionMode.HIGH_QUALITY.takeIf {
++                        camera.supportedNoiseReductionModes.contains(it)
++                    } ?: baseCamera2Options.noiseReductionMode,
++                    shadingMode = ShadingMode.HIGH_QUALITY.takeIf {
++                        camera.supportedShadingModes.contains(it)
++                    } ?: baseCamera2Options.shadingMode,
++                    colorCorrectionAberrationMode = ColorCorrectionAberrationMode.HIGH_QUALITY.takeIf {
++                        camera.supportedColorCorrectionAberrationModes.contains(it)
++                    } ?: baseCamera2Options.colorCorrectionAberrationMode,
++                    hotPixelMode = HotPixelMode.HIGH_QUALITY.takeIf {
++                        camera.supportedHotPixelModes.contains(it)
++                    } ?: baseCamera2Options.hotPixelMode,
++                )
++                CameraMode.PRO_PHOTO -> baseCamera2Options.copy(
++                    manualIso = manualIsoState.value,
++                    manualExposureTimeNs = manualShutterSpeedNsState.value,
++                    manualFocusDistance = manualFocusDistanceState.value,
++                    whiteBalanceMode = manualWhiteBalanceState.value,
++                )
++                else -> baseCamera2Options
++            }
++
+             CameraConfiguration.Photo(
+                 camera = camera,
+-                extensionMode = preferencesRepository.photoEffect.value,
+-                camera2Options = buildPhotoCamera2Options(camera, photoCaptureMode),
++                cameraMode = cameraMode,
++                extensionMode = extensionMode,
++                camera2Options = camera2Options,
+                 photoCaptureMode = photoCaptureMode,
+                 photoAspectRatio = preferencesRepository.photoAspectRatio.value,
+                 enableHighResolution = overlaysRepository.enableHighResolution,
+                 photoOutputFormat = photoOutputFormat,
++                photoResolutionPreset = preferencesRepository.photoResolutionPreset.value,
+             )
+         }
+ 
+-        CameraMode.VIDEO -> {
+-            val videoQuality = preferencesRepository.videoQuality.value.takeIf {
++        CameraMode.VIDEO,
++        CameraMode.PRO_VIDEO -> {
++            val savedPreset = preferencesRepository.videoResolutionPreset.value
++            val videoResolutionPreset = savedPreset.takeIf {
++                camera.supportedVideoResolutionPresets.contains(it)
++            } ?: camera.supportedVideoResolutionPresets.firstOrNull {
++                it.underlyingQuality == preferencesRepository.videoQuality.value
++            } ?: camera.supportedVideoResolutionPresets.firstOrNull()
++                ?: VideoResolutionPreset.FHD_1080P
++
++            val videoQuality = videoResolutionPreset.underlyingQuality.takeIf {
+                 camera.supportedVideoQualities.contains(it)
+             } ?: camera.supportedVideoQualities.keys.firstOrNull() ?: error(
+                 "Camera ${camera.cameraId} does not support any video quality"
+@@ -1716,14 +2068,39 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+                 "No video dynamic range supported by the camera"
+             )
+ 
++            val enableVideoStabilization = preferencesRepository.videoStabilization.value
++            val selectableStabModes = VideoStabilizationMode.getSelectableModes(camera)
++            val videoStabilizationMode = if (!enableVideoStabilization) {
++                VideoStabilizationMode.OFF
++            } else {
++                preferencesRepository.videoStabilizationMode.value?.takeIf {
++                    selectableStabModes.contains(it)
++                } ?: VideoStabilizationMode.getMode(camera)
++            }
++
++            val baseVideoOptions = buildVideoCamera2Options(camera)
++            val camera2Options = if (cameraMode == CameraMode.PRO_VIDEO) {
++                baseVideoOptions.copy(
++                    manualIso = manualIsoState.value,
++                    manualExposureTimeNs = manualShutterSpeedNsState.value,
++                    manualFocusDistance = manualFocusDistanceState.value,
++                    whiteBalanceMode = manualWhiteBalanceState.value,
++                )
++            } else {
++                baseVideoOptions
++            }
++
+             CameraConfiguration.Video(
+                 camera = camera,
+-                camera2Options = buildVideoCamera2Options(camera),
++                cameraMode = cameraMode,
++                camera2Options = camera2Options,
+                 videoQuality = videoQuality,
++                videoResolutionPreset = videoResolutionPreset,
+                 videoFrameRate = videoFrameRate,
+                 videoDynamicRange = videoDynamicRange,
+                 videoMirrorMode = preferencesRepository.videoMirrorMode.value,
+-                enableVideoStabilization = preferencesRepository.videoStabilization.value,
++                enableVideoStabilization = enableVideoStabilization,
++                videoStabilizationMode = videoStabilizationMode,
+             )
+         }
+ 
+@@ -1732,6 +2109,70 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
+         )
+     }
+ 
++    private fun downscaleSavedJpegUriIfNeeded(uri: Uri, maxLongEdge: Int) {
++        runCatching {
++            val cr = applicationContext.contentResolver
++            val exifTags = mutableMapOf<String, String>()
++            val trackedTags = listOf(
++                ExifInterface.TAG_ORIENTATION,
++                ExifInterface.TAG_MAKE,
++                ExifInterface.TAG_MODEL,
++                ExifInterface.TAG_DATETIME,
++                ExifInterface.TAG_DATETIME_ORIGINAL,
++                ExifInterface.TAG_DATETIME_DIGITIZED,
++                ExifInterface.TAG_SUBSEC_TIME,
++                ExifInterface.TAG_GPS_LATITUDE,
++                ExifInterface.TAG_GPS_LATITUDE_REF,
++                ExifInterface.TAG_GPS_LONGITUDE,
++                ExifInterface.TAG_GPS_LONGITUDE_REF,
++                ExifInterface.TAG_ISO_SPEED_RATINGS,
++                ExifInterface.TAG_EXPOSURE_TIME,
++                ExifInterface.TAG_F_NUMBER,
++                ExifInterface.TAG_FOCAL_LENGTH,
++            )
++            cr.openInputStream(uri)?.use { input ->
++                val exif = ExifInterface(input)
++                for (tag in trackedTags) {
++                    exif.getAttribute(tag)?.let { exifTags[tag] = it }
++                }
++            }
++            val original = cr.openInputStream(uri)?.use { input ->
++                BitmapFactory.decodeStream(input)
++            } ?: return@runCatching
++
++            val width = original.width
++            val height = original.height
++            val longEdge = maxOf(width, height)
++            if (longEdge <= maxLongEdge) {
++                original.recycle()
++                return@runCatching
++            }
++
++            val scale = maxLongEdge.toFloat() / longEdge.toFloat()
++            val targetWidth = (width * scale).toInt().coerceAtLeast(1)
++            val targetHeight = (height * scale).toInt().coerceAtLeast(1)
++            val scaled = Bitmap.createScaledBitmap(original, targetWidth, targetHeight, true)
++            if (scaled !== original) {
++                original.recycle()
++            }
++
++            cr.openOutputStream(uri, "wt")?.use { out ->
++                scaled.compress(Bitmap.CompressFormat.JPEG, 95, out)
++            }
++            scaled.recycle()
++
++            cr.openFileDescriptor(uri, "rw")?.use { pfd ->
++                val exifOut = ExifInterface(pfd.fileDescriptor)
++                for ((tag, value) in exifTags) {
++                    exifOut.setAttribute(tag, value)
++                }
++                exifOut.saveAttributes()
++            }
++        }.onFailure {
++            Log.w(LOG_TAG, "Failed to downscale saved JPEG to $maxLongEdge", it)
++        }
++    }
++
+     @androidx.annotation.OptIn(ExperimentalZeroShutterLag::class)
+     private fun buildPhotoCamera2Options(
+         camera: Camera,
+diff --git a/app/src/main/res/drawable/ic_2_5k.xml b/app/src/main/res/drawable/ic_2_5k.xml
+new file mode 100644
+index 0000000..d75a7a5
+--- /dev/null
++++ b/app/src/main/res/drawable/ic_2_5k.xml
+@@ -0,0 +1,15 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: Material Design Authors / Google LLC
++     SPDX-License-Identifier: Apache-2.0
++-->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:tint="#000000"
++    android:viewportWidth="960"
++    android:viewportHeight="960">
++    <path
++        android:fillColor="@android:color/white"
++        android:pathData="M240,600L400,600L400,540L300,540L300,500L360,500Q377,500 388.5,488.5Q400,477 400,460L400,400Q400,383 388.5,371.5Q377,360 360,360L240,360L240,420L340,420L340,460L280,460Q263,460 251.5,471.5Q240,483 240,500L240,600ZM480,600L540,600L540,510L610,600L683,600L590,480L683,360L610,360L540,450L540,360L480,360L480,600ZM690,510L730,510L730,450L690,450L690,410L650,410L650,450L610,450L610,510L650,510L650,550L690,550L690,510ZM200,840Q167,840 143.5,816.5Q120,793 120,760L120,200Q120,167 143.5,143.5Q167,120 200,120L760,120Q793,120 816.5,143.5Q840,167 840,200L840,760Q840,793 816.5,816.5Q793,840 760,840L200,840ZM200,760L760,760L760,200L200,200L200,760Z" />
++</vector>
+diff --git a/app/src/main/res/drawable/ic_2k.xml b/app/src/main/res/drawable/ic_2k.xml
+new file mode 100644
+index 0000000..5bfaf59
+--- /dev/null
++++ b/app/src/main/res/drawable/ic_2k.xml
+@@ -0,0 +1,15 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: Material Design Authors / Google LLC
++     SPDX-License-Identifier: Apache-2.0
++-->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:tint="#000000"
++    android:viewportWidth="960"
++    android:viewportHeight="960">
++    <path
++        android:fillColor="@android:color/white"
++        android:pathData="M260,600L440,600L440,540L320,540L320,500L400,500Q417,500 428.5,488.5Q440,477 440,460L440,400Q440,383 428.5,371.5Q417,360 400,360L260,360L260,420L380,420L380,460L300,460Q283,460 271.5,471.5Q260,483 260,500L260,600ZM520,600L580,600L580,510L650,600L723,600L630,480L723,360L650,360L580,450L580,360L520,360L520,600ZM200,840Q167,840 143.5,816.5Q120,793 120,760L120,200Q120,167 143.5,143.5Q167,120 200,120L760,120Q793,120 816.5,143.5Q840,167 840,200L840,760Q840,793 816.5,816.5Q793,840 760,840L200,840ZM200,760L760,760L760,200L200,200L200,760Z" />
++</vector>
+diff --git a/app/src/main/res/drawable/ic_focus_manual.xml b/app/src/main/res/drawable/ic_focus_manual.xml
+new file mode 100644
+index 0000000..54bc454
+--- /dev/null
++++ b/app/src/main/res/drawable/ic_focus_manual.xml
+@@ -0,0 +1,15 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: Material Design Authors / Google LLC
++     SPDX-License-Identifier: Apache-2.0
++-->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:tint="#000000"
++    android:viewportWidth="960"
++    android:viewportHeight="960">
++    <path
++        android:fillColor="@android:color/white"
++        android:pathData="M480,640Q414,640 367,593Q320,546 320,480Q320,414 367,367Q414,320 480,320Q546,320 593,367Q640,414 640,480Q640,546 593,593Q546,640 480,640ZM200,840Q167,840 143.5,816.5Q120,793 120,760L120,600L200,600L200,760L360,760L360,840L200,840ZM600,840L600,760L760,760L760,600L840,600L840,760Q840,793 816.5,816.5Q793,840 760,840L600,840ZM120,360L120,200Q120,167 143.5,143.5Q167,120 200,120L360,120L360,200L200,200L200,360L120,360ZM760,360L760,200L600,200L600,120L760,120Q793,120 816.5,143.5Q840,167 840,200L840,360L760,360Z" />
++</vector>
+diff --git a/app/src/main/res/drawable/ic_iso.xml b/app/src/main/res/drawable/ic_iso.xml
+new file mode 100644
+index 0000000..c38f1e3
+--- /dev/null
++++ b/app/src/main/res/drawable/ic_iso.xml
+@@ -0,0 +1,15 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: Material Design Authors / Google LLC
++     SPDX-License-Identifier: Apache-2.0
++-->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:tint="#000000"
++    android:viewportWidth="960"
++    android:viewportHeight="960">
++    <path
++        android:fillColor="@android:color/white"
++        android:pathData="M200,840Q167,840 143.5,816.5Q120,793 120,760L120,200Q120,167 143.5,143.5Q167,120 200,120L760,120Q793,120 816.5,143.5Q840,167 840,200L840,760Q840,793 816.5,816.5Q793,840 760,840L200,840ZM220,400L300,400L300,480L360,480L360,400L440,400L440,340L360,340L360,260L300,260L300,340L220,340L220,400ZM256,760L760,760L760,256L256,760ZM520,680L720,680L720,620L520,620L520,680Z" />
++</vector>
+diff --git a/app/src/main/res/drawable/ic_shutter_speed.xml b/app/src/main/res/drawable/ic_shutter_speed.xml
+new file mode 100644
+index 0000000..3ac1508
+--- /dev/null
++++ b/app/src/main/res/drawable/ic_shutter_speed.xml
+@@ -0,0 +1,15 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: Material Design Authors / Google LLC
++     SPDX-License-Identifier: Apache-2.0
++-->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:tint="#000000"
++    android:viewportWidth="960"
++    android:viewportHeight="960">
++    <path
++        android:fillColor="@android:color/white"
++        android:pathData="M480,880Q397,880 324,848.5Q251,817 197,763Q143,709 111.5,636Q80,563 80,480Q80,397 111.5,324Q143,251 197,197Q251,143 324,111.5Q397,80 480,80Q563,80 636,111.5Q709,143 763,197Q817,251 848.5,324Q880,397 880,480Q880,563 848.5,636Q817,709 763,763Q709,817 636,848.5Q563,880 480,880ZM480,800Q577,800 656,747.5Q735,695 773,608L480,608L480,800ZM336,766L458,554L214,554Q245,669 336,766ZM176,474L412,474L294,270Q218,350 176,474ZM364,204L486,416L730,416Q699,301 608,204Q550,160 480,160Q419,160 364,204ZM548,486L666,690Q742,610 784,486L548,486Z" />
++</vector>
+diff --git a/app/src/main/res/drawable/ic_video_stable.xml b/app/src/main/res/drawable/ic_video_stable.xml
+new file mode 100644
+index 0000000..7d78fcf
+--- /dev/null
++++ b/app/src/main/res/drawable/ic_video_stable.xml
+@@ -0,0 +1,15 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: Material Design Authors / Google LLC
++     SPDX-License-Identifier: Apache-2.0
++-->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:tint="#000000"
++    android:viewportWidth="960"
++    android:viewportHeight="960">
++    <path
++        android:fillColor="@android:color/white"
++        android:pathData="M160,800Q127,800 103.5,776.5Q80,753 80,720L80,240Q80,207 103.5,183.5Q127,160 160,160L800,160Q833,160 856.5,183.5Q880,207 880,240L880,720Q880,753 856.5,776.5Q833,800 800,800L160,800ZM160,720L800,720L800,240L160,240L160,720ZM652,664L726,386L308,274L234,552L652,664ZM602,570L328,496L372,332L646,406L602,570Z" />
++</vector>
+diff --git a/app/src/main/res/drawable/ic_video_stable_off.xml b/app/src/main/res/drawable/ic_video_stable_off.xml
+new file mode 100644
+index 0000000..a05f03f
+--- /dev/null
++++ b/app/src/main/res/drawable/ic_video_stable_off.xml
+@@ -0,0 +1,15 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: Material Design Authors / Google LLC
++     SPDX-License-Identifier: Apache-2.0
++-->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:tint="#000000"
++    android:viewportWidth="960"
++    android:viewportHeight="960">
++    <path
++        android:fillColor="@android:color/white"
++        android:pathData="M792,904L688,800L160,800Q127,800 103.5,776.5Q80,753 80,720L80,240Q80,215 94,195L56,156L112,100L848,848L792,904ZM160,720L608,720L492,604L234,536L284,348L160,224L160,720ZM866,765L800,699L800,240L321,240L241,160L800,160Q833,160 856.5,183.5Q880,207 880,240L880,720Q880,745 866,765ZM684,583L622,521L646,406L471,360L397,286L726,386L684,583Z" />
++</vector>
+diff --git a/app/src/main/res/drawable/ic_wb_auto.xml b/app/src/main/res/drawable/ic_wb_auto.xml
+new file mode 100644
+index 0000000..706575d
+--- /dev/null
++++ b/app/src/main/res/drawable/ic_wb_auto.xml
+@@ -0,0 +1,15 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: Material Design Authors / Google LLC
++     SPDX-License-Identifier: Apache-2.0
++-->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:tint="#000000"
++    android:viewportWidth="960"
++    android:viewportHeight="960">
++    <path
++        android:fillColor="@android:color/white"
++        android:pathData="M440,200L440,80L520,80L520,200L440,200ZM440,880L440,760L520,760L520,880L440,880ZM760,520L760,440L880,440L880,520L760,520ZM80,520L80,440L200,440L200,520L80,520ZM708,308L652,252L736,166L794,224L708,308ZM224,794L166,736L252,652L308,708L224,794ZM736,794L652,708L708,652L794,736L736,794ZM252,308L166,224L224,166L308,252L252,308ZM480,720Q380,720 310,650Q240,580 240,480Q240,380 310,310Q380,240 480,240Q580,240 650,310Q720,380 720,480Q720,580 650,650Q580,720 480,720ZM480,640Q546,640 593,593Q640,546 640,480Q640,414 593,367Q546,320 480,320Q414,320 367,367Q320,414 320,480Q320,546 367,593Q414,640 480,640Z" />
++</vector>
+diff --git a/app/src/main/res/layout/activity_camera.xml b/app/src/main/res/layout/activity_camera.xml
+index d5f291f..72e0d50 100644
+--- a/app/src/main/res/layout/activity_camera.xml
++++ b/app/src/main/res/layout/activity_camera.xml
+@@ -148,6 +148,12 @@
+                 android:drawableTop="@drawable/ic_aspect_ratio"
+                 android:text="@string/aspect_ratio_4_3" />
+ 
++            <Button
++                android:id="@+id/photoResolutionButton"
++                style="@style/Theme.Aperture.Camera.SecondaryTopBarButton"
++                android:drawableTop="@drawable/ic_4k"
++                android:text="@string/photo_resolution_full" />
++
+             <Button
+                 android:id="@+id/effectButton"
+                 style="@style/Theme.Aperture.Camera.SecondaryTopBarButton"
+@@ -167,6 +173,12 @@
+                 android:drawableTop="@drawable/ic_video_frame_rate"
+                 android:text="@string/video_framerate_auto" />
+ 
++            <Button
++                android:id="@+id/videoStabilizationButton"
++                style="@style/Theme.Aperture.Camera.SecondaryTopBarButton"
++                android:drawableTop="@drawable/ic_video_stable"
++                android:text="@string/video_stabilization_eis" />
++
+             <Button
+                 android:id="@+id/videoDynamicRangeButton"
+                 style="@style/Theme.Aperture.Camera.SecondaryTopBarButton"
+@@ -179,6 +191,35 @@
+                 android:drawableTop="@drawable/ic_mic_off"
+                 android:text="@string/mic_off" />
+ 
++            <!-- Pro mode specific settings -->
++            <Button
++                android:id="@+id/proIsoButton"
++                style="@style/Theme.Aperture.Camera.SecondaryTopBarButton"
++                android:drawableTop="@drawable/ic_iso"
++                android:text="@string/pro_iso_auto"
++                android:visibility="gone" />
++
++            <Button
++                android:id="@+id/proShutterButton"
++                style="@style/Theme.Aperture.Camera.SecondaryTopBarButton"
++                android:drawableTop="@drawable/ic_shutter_speed"
++                android:text="@string/pro_shutter_auto"
++                android:visibility="gone" />
++
++            <Button
++                android:id="@+id/proWbButton"
++                style="@style/Theme.Aperture.Camera.SecondaryTopBarButton"
++                android:drawableTop="@drawable/ic_wb_auto"
++                android:text="@string/pro_wb_auto"
++                android:visibility="gone" />
++
++            <Button
++                android:id="@+id/proFocusButton"
++                style="@style/Theme.Aperture.Camera.SecondaryTopBarButton"
++                android:drawableTop="@drawable/ic_focus_manual"
++                android:text="@string/pro_focus_auto"
++                android:visibility="gone" />
++
+             <!-- Common settings -->
+             <Button
+                 android:id="@+id/timerButton"
+diff --git a/app/src/main/res/layout/camera_mode_selector_layout.xml b/app/src/main/res/layout/camera_mode_selector_layout.xml
+index 03f1e30..d1eb87c 100644
+--- a/app/src/main/res/layout/camera_mode_selector_layout.xml
++++ b/app/src/main/res/layout/camera_mode_selector_layout.xml
+@@ -8,31 +8,48 @@
+     xmlns:tools="http://schemas.android.com/tools"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:padding="16dp">
++    android:paddingVertical="16dp"
++    android:paddingHorizontal="4dp">
+ 
+-    <com.google.android.material.button.MaterialButton
+-        android:id="@+id/cameraModeHighlightButton"
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:backgroundTint="?attr/colorSecondaryContainer"
+-        android:enabled="false"
+-        android:padding="0dp"
+-        app:iconPadding="0dp"
+-        app:layout_constraintBottom_toBottomOf="parent"
+-        app:layout_constraintEnd_toEndOf="parent"
+-        app:layout_constraintStart_toStartOf="parent"
+-        app:layout_constraintTop_toTopOf="parent" />
+-
+-    <LinearLayout
+-        android:id="@+id/cameraModeButtonsLinearLayout"
++    <HorizontalScrollView
++        android:id="@+id/cameraModeButtonsScrollView"
+         android:layout_width="0dp"
+         android:layout_height="wrap_content"
+-        android:gravity="center"
+-        android:orientation="horizontal"
++        android:clipToPadding="false"
++        android:fillViewport="true"
++        android:overScrollMode="never"
++        android:scrollbars="none"
+         app:layout_constraintBottom_toBottomOf="parent"
+         app:layout_constraintEnd_toEndOf="parent"
+         app:layout_constraintStart_toStartOf="parent"
+-        app:layout_constraintTop_toTopOf="parent" />
++        app:layout_constraintTop_toTopOf="parent">
++
++        <FrameLayout
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content">
++
++            <com.google.android.material.button.MaterialButton
++                android:id="@+id/cameraModeHighlightButton"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_gravity="start|center_vertical"
++                android:backgroundTint="?attr/colorSecondaryContainer"
++                android:enabled="false"
++                android:padding="0dp"
++                app:iconPadding="0dp" />
++
++            <LinearLayout
++                android:id="@+id/cameraModeButtonsLinearLayout"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_gravity="center_horizontal"
++                android:gravity="center"
++                android:orientation="horizontal"
++                android:paddingHorizontal="12dp" />
++
++        </FrameLayout>
++
++    </HorizontalScrollView>
+ 
+     <com.google.android.material.button.MaterialButton
+         android:id="@+id/videoDurationButton"
+diff --git a/app/src/main/res/values-tr/strings.xml b/app/src/main/res/values-tr/strings.xml
+index 09970fe..038bdac 100644
+--- a/app/src/main/res/values-tr/strings.xml
++++ b/app/src/main/res/values-tr/strings.xml
+@@ -172,9 +172,19 @@
+     <string name="thermal_status_emergency">Acil düzeyde ısınma, uygulama şimdi kapanacak.</string>
+     <string name="thermal_status_shutdown">Güç kesme düzeyinde ısınma, cihaz kapanacak.</string>
+     <string name="force_torch_help">Fotoğraf modundayken flaş tuşuna uzun basarak el feneri moduna geçiş yapabilirsiniz.</string>
++    <string name="camera_mode_night">Gece</string>
+     <string name="camera_mode_photo">Fotoğraf</string>
+     <string name="camera_mode_video">Video</string>
++    <string name="camera_mode_pro_photo">Pro Foto</string>
++    <string name="camera_mode_pro_video">Pro Video</string>
+     <string name="camera_mode_qr">Tara</string>
++    <string name="photo_resolution_full">TAM MP</string>
++    <string name="video_stabilization_off">SABİT KPL</string>
++    <string name="pro_iso_auto">ISO OTO</string>
++    <string name="pro_shutter_auto">ENST OTO</string>
++    <string name="pro_wb_auto">WB OTO</string>
++    <string name="pro_focus_auto">ODAK OTO</string>
++    <string name="pro_focus_macro">MAKRO</string>
+     <string name="video_mirror_mode_off">Kapalı</string>
+     <string name="video_mirror_mode_on">Açık</string>
+     <string name="video_mirror_mode_on_ffc_only">Yalnızca ön kamera</string>
+diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+index f29f5c6..e058bfa 100644
+--- a/app/src/main/res/values/strings.xml
++++ b/app/src/main/res/values/strings.xml
+@@ -251,4 +251,24 @@
+     <string name="video_mirror_mode_off">Off</string>
+     <string name="video_mirror_mode_on">On</string>
+     <string name="video_mirror_mode_on_ffc_only">Front facing camera only</string>
++
++    <!-- Additional camera modes, intermediate resolutions, stabilization & Pro controls -->
++    <string name="camera_mode_night">Night</string>
++    <string name="camera_mode_pro_photo">Pro Photo</string>
++    <string name="camera_mode_pro_video">Pro Video</string>
++    <string name="video_quality_2k" translatable="false">2K</string>
++    <string name="video_quality_2_5k" translatable="false">2.5K</string>
++    <string name="photo_resolution_full">FULL</string>
++    <string name="photo_resolution_2_5k" translatable="false">2.5K</string>
++    <string name="photo_resolution_2k" translatable="false">2K</string>
++    <string name="photo_resolution_fhd" translatable="false">FHD</string>
++    <string name="video_stabilization_off">STAB OFF</string>
++    <string name="video_stabilization_eis" translatable="false">EIS</string>
++    <string name="video_stabilization_ois" translatable="false">OIS</string>
++    <string name="video_stabilization_eis_ois" translatable="false">EIS+OIS</string>
++    <string name="pro_iso_auto">ISO AUTO</string>
++    <string name="pro_shutter_auto">S AUTO</string>
++    <string name="pro_wb_auto">WB AUTO</string>
++    <string name="pro_focus_auto">AF</string>
++    <string name="pro_focus_macro">MACRO</string>
+ </resources>
+-- 
+2.56.0
+

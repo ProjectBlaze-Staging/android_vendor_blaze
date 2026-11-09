@@ -1,0 +1,219 @@
+diff --git a/init/selinux.cpp b/init/selinux.cpp
+index 4baf9a4fe..b96dedf9b 100644
+--- a/init/selinux.cpp
++++ b/init/selinux.cpp
+@@ -52,12 +52,16 @@
+ #include "selinux.h"
+ 
+ #include <android/api-level.h>
++#include <dirent.h>
++#include <elf.h>
+ #include <fcntl.h>
+ #include <linux/audit.h>
+ #include <linux/netlink.h>
+ #include <stdlib.h>
+ #include <sys/mount.h>
++#include <sys/stat.h>
+ #include <sys/wait.h>
++#include <sys/xattr.h>
+ #include <unistd.h>
+ 
+ #include <android-base/chrono_utils.h>
+@@ -782,6 +786,144 @@ bool EarlySetupOverlays() {
+ void SetupOverlays() {}
+ #endif
+ 
++static void CopySelinuxXattrAndBindMount(const std::string& src_path, const std::string& dst_path) {
++    char con[256] = {};
++    ssize_t len = lgetxattr(src_path.c_str(), XATTR_NAME_SELINUX, con, sizeof(con) - 1);
++    if (len > 0) {
++        lsetxattr(dst_path.c_str(), XATTR_NAME_SELINUX, con, len, 0);
++    }
++    chmod(dst_path.c_str(), 0644);
++    if (mount(dst_path.c_str(), src_path.c_str(), nullptr, MS_BIND, nullptr) == 0) {
++        LOG(INFO) << "Applied vendor compat bind-mount for " << src_path;
++    } else {
++        PLOG(WARNING) << "Failed vendor compat bind-mount for " << src_path;
++    }
++}
++
++static void PatchVendorCompatFiles() {
++    constexpr const char* kCompatDir = "/dev/__vendor_compat";
++    mkdir(kCompatDir, 0755);
++
++    // 1. Patch restrictive mremap seccomp rules in older vendor C2/media policies
++    //    so Android 15+ Bionic mremap(MREMAP_MAYMOVE) does not trigger SIGSYS.
++    const char* seccomp_dirs[] = {"/vendor/etc/seccomp_policy", "/odm/etc/seccomp_policy"};
++    for (const char* dir_path : seccomp_dirs) {
++        std::unique_ptr<DIR, decltype(&closedir)> dir(opendir(dir_path), closedir);
++        if (!dir) continue;
++        while (struct dirent* de = readdir(dir.get())) {
++            if (de->d_name[0] == '.') continue;
++            std::string src_path = std::string(dir_path) + "/" + de->d_name;
++            std::string content;
++            if (!android::base::ReadFileToString(src_path, &content)) continue;
++            if (content.find("mremap: arg3 == 3") == std::string::npos) continue;
++
++            content = android::base::StringReplace(content, "mremap: arg3 == 3", "mremap: 1", true);
++            std::string dst_path = std::string(kCompatDir) + "/" + de->d_name;
++            if (android::base::WriteStringToFile(content, dst_path, 0644, 0, 0)) {
++                CopySelinuxXattrAndBindMount(src_path, dst_path);
++            }
++        }
++    }
++
++    // 2. Patch Samsung Exynos camera NPU libvpl.so vplUnload() to keep the EDEN
++    //    singleton alive across camera close/switch and avoid SIGSEGV in camera provider.
++    const std::string vpl_src = "/vendor/lib64/libvpl.so";
++    std::string elf_data;
++    if (android::base::ReadFileToString(vpl_src, &elf_data) &&
++        elf_data.size() >= sizeof(Elf64_Ehdr) &&
++        memcmp(elf_data.data(), ELFMAG, SELFMAG) == 0) {
++        const auto* ehdr = reinterpret_cast<const Elf64_Ehdr*>(elf_data.data());
++        if (ehdr->e_ident[EI_CLASS] == ELFCLASS64 && ehdr->e_machine == EM_AARCH64 &&
++            ehdr->e_shoff > 0 && ehdr->e_phoff > 0 &&
++            ehdr->e_shoff + static_cast<size_t>(ehdr->e_shnum) * sizeof(Elf64_Shdr) <= elf_data.size() &&
++            ehdr->e_phoff + static_cast<size_t>(ehdr->e_phnum) * sizeof(Elf64_Phdr) <= elf_data.size()) {
++            const auto* shdrs = reinterpret_cast<const Elf64_Shdr*>(elf_data.data() + ehdr->e_shoff);
++            const auto* phdrs = reinterpret_cast<const Elf64_Phdr*>(elf_data.data() + ehdr->e_phoff);
++            size_t patch_offset = 0;
++
++            for (uint16_t i = 0; i < ehdr->e_shnum && patch_offset == 0; ++i) {
++                if (shdrs[i].sh_type != SHT_DYNSYM || shdrs[i].sh_link >= ehdr->e_shnum ||
++                    shdrs[i].sh_entsize != sizeof(Elf64_Sym)) {
++                    continue;
++                }
++                const auto& sym_sec = shdrs[i];
++                const auto& str_sec = shdrs[sym_sec.sh_link];
++                if (sym_sec.sh_offset + sym_sec.sh_size > elf_data.size() ||
++                    str_sec.sh_offset + str_sec.sh_size > elf_data.size()) {
++                    continue;
++                }
++                size_t num_syms = sym_sec.sh_size / sizeof(Elf64_Sym);
++                const auto* syms = reinterpret_cast<const Elf64_Sym*>(elf_data.data() + sym_sec.sh_offset);
++                const char* strtab = elf_data.data() + str_sec.sh_offset;
++
++                for (size_t j = 0; j < num_syms; ++j) {
++                    if (syms[j].st_name >= str_sec.sh_size || syms[j].st_value == 0) continue;
++                    const char* sym_name = strtab + syms[j].st_name;
++                    if (strnlen(sym_name, str_sec.sh_size - syms[j].st_name) < 9) continue;
++                    if (strcmp(sym_name, "vplUnload") == 0) {
++                        for (uint16_t k = 0; k < ehdr->e_phnum; ++k) {
++                            if (phdrs[k].p_type == PT_LOAD &&
++                                phdrs[k].p_vaddr <= syms[j].st_value &&
++                                syms[j].st_value + 8 <= phdrs[k].p_vaddr + phdrs[k].p_filesz) {
++                                patch_offset = phdrs[k].p_offset + (syms[j].st_value - phdrs[k].p_vaddr);
++                                break;
++                            }
++                        }
++                        break;
++                    }
++                }
++            }
++
++            if (patch_offset > 0 && patch_offset + 8 <= elf_data.size()) {
++                // ARM64: mov w0, #0 (0x52800000); ret (0xd65f03c0)
++                const uint8_t noop_ret[8] = {0x00, 0x00, 0x80, 0x52, 0xc0, 0x03, 0x5f, 0xd6};
++                memcpy(elf_data.data() + patch_offset, noop_ret, sizeof(noop_ret));
++                std::string vpl_dst = std::string(kCompatDir) + "/libvpl.so";
++                if (android::base::WriteStringToFile(elf_data, vpl_dst, 0644, 0, 0)) {
++                    CopySelinuxXattrAndBindMount(vpl_src, vpl_dst);
++                }
++            }
++        }
++    }
++
++    // 3. Patch Samsung Exynos Audio HAL (audio.primary.*.so) get_device_id_from_input()
++    //    so AUDIO_DEVICE_IN_BACK_MIC (0x1f) calls check_device_builtin_mic() and routes
++    //    camcorder-multi-mic instead of single-mic camcorder-2nd-mic during 3-mic RecordAlive.
++    static constexpr const char* kAudioHalDirs[] = {
++        "/vendor/lib/hw",
++        "/vendor/lib64/hw",
++    };
++    const uint8_t kAudioInTbbOrig[20] = {
++        0xdf, 0xe8, 0x01, 0xf0, 0x06, 0x05, 0x10, 0x05, 0x16, 0x05,
++        0x05, 0x05, 0x05, 0x1b, 0xdf, 0xe7, 0x40, 0x46, 0x1e, 0x21,
++    };
++    const uint8_t kAudioInTbbPatch[20] = {
++        0xdf, 0xe8, 0x01, 0xf0, 0x06, 0x06, 0x10, 0x05, 0x16, 0x05,
++        0x05, 0x05, 0x05, 0x1b, 0xdf, 0xe7, 0x01, 0x46, 0x40, 0x46,
++    };
++    for (const char* dir_path : kAudioHalDirs) {
++        std::unique_ptr<DIR, decltype(&closedir)> dir(opendir(dir_path), closedir);
++        if (!dir) continue;
++        while (struct dirent* de = readdir(dir.get())) {
++            if (!android::base::StartsWith(de->d_name, "audio.primary.") ||
++                !android::base::EndsWith(de->d_name, ".so")) {
++                continue;
++            }
++            std::string src_path = std::string(dir_path) + "/" + de->d_name;
++            std::string hal_data;
++            if (!android::base::ReadFileToString(src_path, &hal_data)) continue;
++            void* match = memmem(hal_data.data(), hal_data.size(),
++                                 kAudioInTbbOrig, sizeof(kAudioInTbbOrig));
++            if (!match) continue;
++            memcpy(match, kAudioInTbbPatch, sizeof(kAudioInTbbPatch));
++            std::string dst_path = std::string(kCompatDir) + "/" + de->d_name;
++            if (android::base::WriteStringToFile(hal_data, dst_path, 0644, 0, 0)) {
++                CopySelinuxXattrAndBindMount(src_path, dst_path);
++            }
++        }
++    }
++}
++
+ int SetupSelinux(char** argv) {
+     SetStdioToDevNull(argv);
+     InitKernelLogging(argv);
+@@ -802,6 +944,7 @@ int SetupSelinux(char** argv) {
+         LoadSelinuxPolicyMicrodroid();
+     } else {
+         LoadSelinuxPolicyAndroid();
++        PatchVendorCompatFiles();
+     }
+ 
+     SelinuxSetEnforcement();
+diff --git a/init/ueventd.cpp b/init/ueventd.cpp
+index 28419d989..d22db03ba 100644
+--- a/init/ueventd.cpp
++++ b/init/ueventd.cpp
+@@ -129,7 +129,15 @@ static UeventdConfiguration GetConfiguration() {
+         return ParseConfig({"/system/etc/ueventd.rc", "/vendor/etc/ueventd.rc"});
+     }
+ 
+-    return ParseConfig({"/system/etc/ueventd.rc"});
++    auto hardware = android::base::GetProperty("ro.hardware", "");
++    std::vector<std::string> canonical{
++            "/system/etc/ueventd.rc",
++            "/vendor/ueventd.rc",
++            "/odm/ueventd.rc",
++            "/ueventd." + hardware + ".rc",
++    };
++
++    return ParseConfig(canonical);
+ }
+ 
+ void main_loop(const UeventListener& uevent_listener,
+diff --git a/rootdir/init.rc b/rootdir/init.rc
+index 56024b939..7f5a32a98 100644
+--- a/rootdir/init.rc
++++ b/rootdir/init.rc
+@@ -1259,6 +1259,10 @@ on boot
+     # Define default initial receive window size in segments.
+     setprop net.tcp_def_init_rwnd 60
+ 
++    # Expose auxiliary cameras (Ultra-Wide / Telephoto) to Aperture on Qualcomm Snapdragon & MediaTek HALs
++    setprop vendor.camera.aux.packagelist org.lineageos.aperture,com.android.camera,com.sec.android.app.camera
++    setprop persist.vendor.camera.privapp.list org.lineageos.aperture,com.android.camera,com.sec.android.app.camera
++
+     # Start standard binderized HAL daemons
+     class_start hal
+ 
+@@ -1283,6 +1287,8 @@ on property:sys.boot_completed=1
+     # Setup per_boot directory so other .rc could start to use it on boot_completed
+     exec - system system -- /bin/rm -rf /data/per_boot
+     mkdir /data/per_boot 0710 system system encryption=Require key=per_boot_ref
++    # Default to highest supported display refresh rate on first boot
++    exec_background u:r:su:s0 root root -- /system/bin/sh -c "if [ \"$(settings get system peak_refresh_rate)\" = \"null\" ]; then settings put system peak_refresh_rate Infinity; settings put system min_refresh_rate Infinity; fi"
+ 
+ # system server cannot write to /proc/sys files,
+ # and chown/chmod does not work for /proc/sys/ entries.

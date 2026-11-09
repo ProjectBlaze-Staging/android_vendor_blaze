@@ -1,0 +1,13 @@
+diff --git a/fs/F2fs.cpp b/fs/F2fs.cpp
+index ebd2e36..f94e4be 100644
+--- a/fs/F2fs.cpp
++++ b/fs/F2fs.cpp
+@@ -155,7 +155,7 @@ status_t Format(const std::string& source, bool is_zoned,
+ 
+     cmd.emplace_back(source.c_str());
+ 
+-    if (length) {
++    if (length > 0) {
+         cmd.emplace_back(std::to_string(length / kSectorSize));
+     }
+ 

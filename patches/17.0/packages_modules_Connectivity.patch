@@ -1,0 +1,164 @@
+diff --git a/bpf/headers/include/bpf/BpfUtils.h b/bpf/headers/include/bpf/BpfUtils.h
+index 5ca52c6c62..29287366c7 100644
+--- a/bpf/headers/include/bpf/BpfUtils.h
++++ b/bpf/headers/include/bpf/BpfUtils.h
+@@ -93,7 +93,16 @@ static inline bool isWear() {
+ }
+ #endif
+ 
+-static inline int get_api_level_full() {
++static inline int clamp_api_level_for_kernel(int rv) {
++    if (!isAtLeastKernelVersion(4, 14)) return std::min(rv, 3300);  // 4.9 -> T
++    if (!isAtLeastKernelVersion(4, 19)) return std::min(rv, 3400);  // 4.14 -> U
++    if (!isAtLeastKernelVersion(5, 4))  return std::min(rv, 3500);  // 4.19 -> V
++    if (!isAtLeastKernelVersion(5, 10)) return std::min(rv, 3600);  // 5.4 -> 25Q2
++    if (!isAtLeastKernelVersion(5, 15)) return std::min(rv, 3702);  // 5.10 -> 26Q2/26Q3
++    return rv;
++}
++
++static inline int get_api_level_full_raw() {
+     // This fetches/parses 'ro.build.version.sdk' system property.
+     const int api_level = android_get_device_api_level();
+     // Before Baklava/25Q2 there is no 'sdk_full'
+@@ -145,6 +154,10 @@ static inline int get_api_level_full() {
+     return rv;
+ }
+ 
++static inline int get_api_level_full() {
++    return clamp_api_level_for_kernel(get_api_level_full_raw());
++}
++
+ const int api_level_full = get_api_level_full();
+ 
+ const bool isAtLeastS    = (api_level_full >= 3100);  // 31
+diff --git a/bpf/loader/NetBpfLoad.cpp b/bpf/loader/NetBpfLoad.cpp
+index 7ba3247dcc..69e412fd88 100644
+--- a/bpf/loader/NetBpfLoad.cpp
++++ b/bpf/loader/NetBpfLoad.cpp
+@@ -1337,11 +1337,12 @@ static bool exists(const char* const path) {
+ }
+ 
+ static bool loadObject(const char* const progPath, const bool useLibbpf = true) {
+-    if (useLibbpf ? loadProgByLibbpf(progPath) : loadProg(progPath)) {
+-        ALOGE("Failed to load object: %s, libbpf: %d", progPath, useLibbpf);
++    const bool actualUseLibbpf = useLibbpf && isAtLeastKernelVersion(5, 10);
++    if (actualUseLibbpf ? loadProgByLibbpf(progPath) : loadProg(progPath)) {
++        ALOGE("Failed to load object: %s, libbpf: %d", progPath, actualUseLibbpf);
+         return false;
+     }
+-    ALOGD("Loaded object: %s, libbpf: %d", progPath, useLibbpf);
++    ALOGD("Loaded object: %s, libbpf: %d", progPath, actualUseLibbpf);
+     return true;
+ }
+ 
+diff --git a/service/jni/com_android_server_connectivity_LocalNetEventListener.cpp b/service/jni/com_android_server_connectivity_LocalNetEventListener.cpp
+index 9e1c027b07..292f788a62 100644
+--- a/service/jni/com_android_server_connectivity_LocalNetEventListener.cpp
++++ b/service/jni/com_android_server_connectivity_LocalNetEventListener.cpp
+@@ -22,6 +22,7 @@
+ #include <nativehelper/JNIPlatformHelp.h>
+ #include <nativehelper/jni_macros.h>
+ #include <nativehelper/scoped_local_ref.h>
++#include <sys/eventfd.h>
+ #include <utils/misc.h>
+ 
+ #include "bpf/BpfUtils.h"
+@@ -34,8 +35,11 @@ using android::net::eventpolling::LocalNetEventHandler;
+ static jobject nativeGetLocalNetAccessRingbufFd(JNIEnv *env, jclass clazz) {
+     android::base::unique_fd fd = LocalNetEventHandler::GetNewRingbufFd();
+     if (!fd.ok()) {
+-        ALOGE("Failed to get local net event ring buffer.");
+-        return nullptr;
++        ALOGW("Failed to get local net event ring buffer; falling back to dummy eventfd.");
++        fd.reset(eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC));
++        if (!fd.ok()) {
++            return nullptr;
++        }
+     }
+     return jniCreateFileDescriptor(env, fd.release());
+ }
+diff --git a/service/native/libs/libeventpolling/LocalNetEventHandler.cpp b/service/native/libs/libeventpolling/LocalNetEventHandler.cpp
+index 59c28445fb..b22a31cc06 100644
+--- a/service/native/libs/libeventpolling/LocalNetEventHandler.cpp
++++ b/service/native/libs/libeventpolling/LocalNetEventHandler.cpp
+@@ -36,6 +36,11 @@ using bpf::RingbufEventPoller;
+ LocalNetEventHandler::LocalNetEventRingbuf *LocalNetEventHandler::GetRingbuf() {
+     static LocalNetEventRingbuf *const sRingbuf =
+         []() -> LocalNetEventRingbuf * {
++        if (!bpf::isAtLeastKernelVersion(5, 10, 0) ||
++            access(LOCAL_NET_NOTE_OP_RINGBUF_PATH, F_OK) != 0) {
++            ALOGW("LocalNetEventRingbuf not supported on kernel < 5.10");
++            return nullptr;
++        }
+         auto rb = std::make_unique<LocalNetEventRingbuf>(
+             LOCAL_NET_NOTE_OP_RINGBUF_PATH);
+         return rb.release();
+@@ -46,8 +51,12 @@ LocalNetEventHandler::LocalNetEventRingbuf *LocalNetEventHandler::GetRingbuf() {
+ // static
+ std::vector<uint32_t> LocalNetEventHandler::ConsumeAll() {
+     std::vector<uint32_t> uids_pids;
++    auto *rb = GetRingbuf();
++    if (!rb) {
++        return uids_pids;
++    }
+     base::Result<int> ret =
+-        GetRingbuf()->ConsumeAll([&](const LocalNetNoteOp &event) {
++        rb->ConsumeAll([&](const LocalNetNoteOp &event) {
+             uids_pids.push_back(event.uid);
+             uids_pids.push_back(event.pid);
+         });
+diff --git a/service/native/libs/libeventpolling/LoopbackEventHandler.cpp b/service/native/libs/libeventpolling/LoopbackEventHandler.cpp
+index 942bbf653b..900c949e14 100644
+--- a/service/native/libs/libeventpolling/LoopbackEventHandler.cpp
++++ b/service/native/libs/libeventpolling/LoopbackEventHandler.cpp
+@@ -53,6 +53,11 @@ bpf::RingbufEventPoller<LoopbackAccessEvent> *
+ LoopbackEventHandler::GetPoller() {
+     static bpf::RingbufEventPoller<LoopbackAccessEvent> *const sPoller =
+         []() -> bpf::RingbufEventPoller<LoopbackAccessEvent> * {
++        if (!bpf::isAtLeastKernelVersion(5, 10, 0) ||
++            access(LOOPBACK_ACCESS_RINGBUF_NETD_PATH, F_OK) != 0) {
++            ALOGW("LoopbackAccessEvent ringbuf not supported on kernel < 5.10");
++            return nullptr;
++        }
+         auto rb = std::make_unique<BpfRingbuf<LoopbackAccessEvent>>(
+             LOOPBACK_ACCESS_RINGBUF_NETD_PATH);
+ 
+diff --git a/service/native/libs/libeventpolling/include/libeventpolling/LocalNetEventHandler.h b/service/native/libs/libeventpolling/include/libeventpolling/LocalNetEventHandler.h
+index ce46620ef7..5954ea5594 100644
+--- a/service/native/libs/libeventpolling/include/libeventpolling/LocalNetEventHandler.h
++++ b/service/native/libs/libeventpolling/include/libeventpolling/LocalNetEventHandler.h
+@@ -16,6 +16,7 @@
+ 
+ #pragma once
+ 
++#include <sys/eventfd.h>
+ #include <vector>
+ 
+ #include <android-base/unique_fd.h>
+@@ -36,7 +37,12 @@ class LocalNetEventHandler {
+     // Returns a duplicate of the ring buffer file descriptor. This is needed so
+     // we can pass the file descriptor via jni for use in polling in java.
+     static android::base::unique_fd GetNewRingbufFd() {
+-        return GetRingbuf()->GetDuplicateFd();
++        auto *rb = GetRingbuf();
++        if (!rb) {
++            return android::base::unique_fd(
++                eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC));
++        }
++        return rb->GetDuplicateFd();
+     }
+ 
+     // Consumes all available events in the ring buffer. Returns a list of
+diff --git a/service/src/com/android/server/connectivity/LocalNetEventListener.java b/service/src/com/android/server/connectivity/LocalNetEventListener.java
+index e8d495ca81..9cd071807e 100644
+--- a/service/src/com/android/server/connectivity/LocalNetEventListener.java
++++ b/service/src/com/android/server/connectivity/LocalNetEventListener.java
+@@ -98,7 +98,7 @@ public class LocalNetEventListener {
+         if (mStarted) {
+             return;
+         }
+-        if (mMetricsEnabled || mNoteOpsEnabled) {
++        if ((mMetricsEnabled || mNoteOpsEnabled) && mRingbufFd != null) {
+             mLooper.getQueue().addOnFileDescriptorEventListener(mRingbufFd,
+                     EVENT_INPUT | EVENT_ERROR, this::consumeEvents);
+         }
