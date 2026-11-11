@@ -1,79 +1,8 @@
-diff --git a/core/soong_extra_config.mk b/core/soong_extra_config.mk
-index 03fcc961dd..574e3c86f3 100644
---- a/core/soong_extra_config.mk
-+++ b/core/soong_extra_config.mk
-@@ -46,6 +46,7 @@ $(call add_json_str, SystemServerCompilerFilter, $(PRODUCT_SYSTEM_SERVER_COMPILE
- $(call add_json_bool, Product16KDeveloperOption, $(filter true,$(PRODUCT_16K_DEVELOPER_OPTION)))
- 
- $(call add_json_str, RecoveryDefaultRotation, $(TARGET_RECOVERY_DEFAULT_ROTATION))
-+$(call add_json_str, RecoveryDefaultTouchRotation, $(TARGET_RECOVERY_DEFAULT_TOUCH_ROTATION))
- $(call add_json_str, RecoveryOverscanPercent, $(TARGET_RECOVERY_OVERSCAN_PERCENT))
- $(call add_json_str, RecoveryPixelFormat, $(TARGET_RECOVERY_PIXEL_FORMAT))
- ifdef TARGET_RECOVERY_NO_INITIAL_MODSET_FLUSH
-diff --git a/core/sysprop_config.mk b/core/sysprop_config.mk
-index b1baf5ee39..82d3e59d3f 100644
---- a/core/sysprop_config.mk
-+++ b/core/sysprop_config.mk
-@@ -43,6 +43,10 @@ ifdef TARGET_RECOVERY_DEFAULT_ROTATION
- ADDITIONAL_VENDOR_PROPERTIES += \
-     ro.minui.default_rotation=$(TARGET_RECOVERY_DEFAULT_ROTATION)
- endif
-+ifdef TARGET_RECOVERY_DEFAULT_TOUCH_ROTATION
-+ADDITIONAL_VENDOR_PROPERTIES += \
-+    ro.minui.default_touch_rotation=$(TARGET_RECOVERY_DEFAULT_TOUCH_ROTATION)
-+endif
- ifdef TARGET_RECOVERY_OVERSCAN_PERCENT
- ADDITIONAL_VENDOR_PROPERTIES += \
-     ro.minui.overscan_percent=$(TARGET_RECOVERY_OVERSCAN_PERCENT)
-diff --git a/envsetup.sh b/envsetup.sh
-index 9093e123dd..40a12c8e24 100644
---- a/envsetup.sh
-+++ b/envsetup.sh
-@@ -16,6 +16,11 @@
- # to work when checking unbound variables is disallowed.
- set +u
- 
-+# Set POSIX/C locale to prevent Turkish I/ı lowercase conversion bug in Java/AutoValue/Turbine
-+export LC_ALL=C
-+export LANG=C.UTF-8
-+export LANGUAGE=C
-+
- # gettop is duplicated here and in shell_utils.mk, because it's difficult
- # to find shell_utils.make without it for all the novel ways this file can be
- # sourced.  Other common functions should only be in one place or the other.
-diff --git a/target/board/gsi_system_ext.prop b/target/board/gsi_system_ext.prop
-index e499d83748..51607e8a00 100644
---- a/target/board/gsi_system_ext.prop
-+++ b/target/board/gsi_system_ext.prop
-@@ -1,13 +1,14 @@
- # GSI always generate dex pre-opt in system image
- ro.cp_system_other_odex=0
- 
--# GSI always disables adb authentication
--ro.adb.secure=0
-+# ro.control_privapp_permissions=log and other GSI configs
- 
- # GSI disables non-AOSP nnapi extensions on product partition
- ro.nnapi.extensions.deny_on_product=true
- 
--# TODO(b/120679683): disable RescueParty before all problem apps solved
-+# Disable rescue and watchdog crashes for GSI testing
- persist.sys.disable_rescue=true
--
--ro.control_privapp_permissions=enforce
-+ro.control_privapp_permissions=log
-+persist.sys.strictmode.disable=true
-+ro.system.strictmode.enable=0
-+dalvik.vm.dexopt.thermal-cutoff=2
 diff --git a/target/product/gsi/Android.bp b/target/product/gsi/Android.bp
-index 4fdb3ab866..3a8ff14d1c 100644
+index 4c0552eb91..a46d816497 100644
 --- a/target/product/gsi/Android.bp
 +++ b/target/product/gsi/Android.bp
-@@ -95,10 +95,11 @@ android_filesystem_defaults {
-         // gsi_system_ext
-         ///////////////////////////////////////////
- 
--        // handheld packages
+@@ -98,15 +98,11 @@ android_filesystem_defaults {
          "Launcher3QuickStep",
          "Provision",
          "Settings",
@@ -82,19 +11,47 @@ index 4fdb3ab866..3a8ff14d1c 100644
          "StorageManager",
          "SystemUI",
  
-@@ -130,8 +131,9 @@ android_filesystem_defaults {
+-        // LineageOS Platform & SDK
+-        "org.lineageos.platform",
+-        "org.lineageos.platform.internal",
+-        "org.lineageos.platform-res",
+-        "LineageSettingsProvider",
+-
+         // Allowlist for handheld packages
+         "preinstalled-packages-handheld-system-ext.xml",
+ 
+@@ -125,23 +121,22 @@ android_filesystem_defaults {
+         "gsi_overlay_systemui",
+ 
+         ///////////////////////////////////////////
+-        // VNDK
++        // VNDK & Legacy FCM Compatibility (API 30-34)
+         ///////////////////////////////////////////
++        "com.android.vndk.v30",
+         "com.android.vndk.v31",
+         "com.android.vndk.v32",
+         "com.android.vndk.v33",
+         "com.android.vndk.v34",
++        "compatibility_matrix.5.xml",
++        "compatibility_matrix.6.xml",
+ 
          ///////////////////////////////////////////
          // gsi_product
          ///////////////////////////////////////////
 -        "Browser2",
--        "Camera2",
+-        "Aperture",
+-        "ApertureFrameworksBaseOverlay",
+-        "ApertureLensLauncher",
+-        "AuroraStore",
+-        "Firefox",
+-        "FossifyGallery",
 +        "webview",
 +        "libwebviewchromium_loader",
 +        "libwebviewchromium_plat_support",
          "Dialer",
          "LatinIME",
          "messaging",
-@@ -180,6 +182,84 @@ android_system_image {
+@@ -190,6 +185,84 @@ android_system_image {
          // init-second-stage to load debug policy from system_ext.
          // This option is only meant to be set by compliance GSI targets.
          "system_ext_userdebug_plat_sepolicy.cil",
@@ -179,94 +136,67 @@ index 4fdb3ab866..3a8ff14d1c 100644
      ] + select(soong_config_variable("gsi", "import_usb_debugging_test_app"), {
          true: ["UsbDisableDebugger"],
          default: [],
-@@ -201,7 +281,7 @@ android_system_image {
-         "preinstalled-packages-platform-telephony-system-ext.xml",
- 
-         // handheld_product
--        "Calendar",
-+        //"Calendar",
-         "Contacts",
-         "DeskClock",
-         "Gallery2",
-@@ -218,7 +298,7 @@ android_system_image {
- 
-         // more AOSP packages
-         "initial-package-stopped-states-aosp.xml",
--        "PhotoTable",
-+        //"PhotoTable",
-         "preinstalled-packages-platform-aosp-product.xml",
-         "ThemePicker",
-     ] + select(product_variable("debuggable"), {
 diff --git a/target/product/gsi/init.gsi.rc b/target/product/gsi/init.gsi.rc
-index 69c8e467be..777685563b 100644
+index 7f0ff16c01..da629c8962 100644
 --- a/target/product/gsi/init.gsi.rc
 +++ b/target/product/gsi/init.gsi.rc
-@@ -3,3 +3,98 @@
- #
+@@ -4,13 +4,50 @@
  
  import /system/system_ext/etc/gsi/init.vndk-${ro.vndk.version:-nodef}.rc
+ 
++# Legacy Android 11-14 vendors (VNDK 29-34) predate KeyMint v4 (Android 15 / 202404)
++# and do not support setAdditionalAttestationInfo(MODULE_HASH). Gate keystore.module_hash.sent
++# strictly by legacy VNDK version so KeyMint v4+ devices still receive genuine MODULE_HASH.
++on property:ro.vndk.version=29
++    setprop keystore.module_hash.sent true
 +
-+on post-fs-data
-+    # Universal Multi-Camera (Aux / Ultrawide / Telephoto) exposure for Xiaomi, OnePlus, Nothing, Realme
-+    setprop vendor.camera.aux.packagelist "org.lineageos.aperture,com.android.camera,com.android.camera2,org.codeaurora.snapcam,com.google.android.GoogleCamera"
-+    setprop persist.vendor.camera.privapp.list "org.lineageos.aperture,com.android.camera,com.android.camera2,org.codeaurora.snapcam,com.google.android.GoogleCamera"
-+    setprop persist.sys.phh.include_all_cameras true
++on property:ro.vndk.version=30
++    setprop keystore.module_hash.sent true
 +
-+on boot
-+    # Universal VoLTE / VoWiFi / VT IMS provisioning overrides for Qualcomm, MediaTek, Exynos & Tensor
-+    setprop persist.dbg.volte_avail_ovr 1
-+    setprop persist.dbg.vt_avail_ovr 1
-+    setprop persist.dbg.wfc_avail_ovr 1
-+    setprop persist.radio.rat_on combine
-+    setprop persist.radio.data_ltd_sys_ind 1
-+    setprop persist.radio.data_con_rprt 1
++on property:ro.vndk.version=31
++    setprop keystore.module_hash.sent true
 +
-+    # Grant system/graphics access to multi-vendor Backlight & Optical UDFPS HBM sysfs nodes
-+    chmod 0666 /sys/class/backlight/panel0-backlight/brightness
-+    chmod 0666 /sys/class/backlight/panel/brightness
-+    chmod 0666 /sys/class/leds/lcd-backlight/brightness
-+    chmod 0666 /sys/class/drm/card0-DSI-1/disp_param
-+    chmod 0666 /sys/kernel/oplus_display/notify_fppress
-+    chmod 0666 /sys/kernel/oplus_display/dimlayer_hbm
-+    chmod 0666 /sys/class/sec/tsp/cmd
-+    chmod 0666 /sys/class/lcd/panel/mask_brightness
++on property:ro.vndk.version=32
++    setprop keystore.module_hash.sent true
 +
-+# BlazeHouse Treble Toolkit: Optical UDFPS HBM triggers (Xiaomi, OnePlus/Oppo/Realme, Samsung)
-+on property:sys.blaze.udfps_hbm=1
-+    write /sys/class/drm/card0-DSI-1/disp_param 0x20000
++on property:ro.vndk.version=33
++    setprop keystore.module_hash.sent true
 +
-+on property:sys.blaze.udfps_hbm=2
-+    write /sys/kernel/oplus_display/dimlayer_hbm 1
-+    write /sys/kernel/oplus_display/notify_fppress 1
++on property:ro.vndk.version=34
++    setprop keystore.module_hash.sent true
 +
-+on property:sys.blaze.udfps_hbm=3
-+    write /sys/class/sec/tsp/cmd "fod_enable,1,1,0"
+ on post-fs-data
+     # Universal Multi-Camera (Aux / Ultrawide / Telephoto) exposure for Xiaomi, OnePlus, Nothing, Realme
+-    setprop vendor.camera.aux.packagelist "org.lineageos.aperture,com.android.camera,com.android.camera2,org.codeaurora.snapcam,com.google.android.GoogleCamera"
+-    setprop persist.vendor.camera.privapp.list "org.lineageos.aperture,com.android.camera,com.android.camera2,org.codeaurora.snapcam,com.google.android.GoogleCamera"
++    setprop vendor.camera.aux.packagelist "org.lineageos.aperture,com.android.camera,com.android.camera2,org.codeaurora.snapcam"
++    setprop persist.vendor.camera.privapp.list "org.lineageos.aperture,com.android.camera,com.android.camera2,org.codeaurora.snapcam"
+     setprop persist.sys.phh.include_all_cameras true
++    setprop debug.doze.aod true
++    setprop doze.display.supported false
 +
-+on property:sys.blaze.udfps_hbm=0
-+    write /sys/class/drm/card0-DSI-1/disp_param 0xE0000
-+    write /sys/kernel/oplus_display/notify_fppress 0
-+    write /sys/kernel/oplus_display/dimlayer_hbm 0
++on property:sys.boot_completed=1
++    # Prevent broken router IPv6 RDNSS blackholes while keeping IPv4/IPv6 dual-stack fast
++    write /proc/sys/net/ipv6/conf/all/accept_ra_rdnss 0
++    write /proc/sys/net/ipv6/conf/default/accept_ra_rdnss 0
++    write /proc/sys/net/ipv6/conf/wlan0/accept_ra_rdnss 0
 +
-+# BlazeHouse Treble Toolkit: Bluetooth A2DP Offload control (Qualcomm / Exynos / MediaTek audio fix)
-+on property:persist.sys.blaze.bt_a2dp_offload_disable=1
-+    setprop persist.bluetooth.a2dp_offload.disabled true
-+    setprop vendor.audio.feature.a2dp_offload.enable false
-+
-+on property:persist.sys.blaze.bt_a2dp_offload_disable=0
-+    setprop persist.bluetooth.a2dp_offload.disabled false
-+    setprop vendor.audio.feature.a2dp_offload.enable true
-+
-+# BlazeHouse Treble Toolkit: SurfaceFlinger / GPU Buffer Latch compatibility (MediaTek / Exynos / Adreno)
-+on property:persist.sys.blaze.sf_gl_compat=1
-+    setprop debug.sf.latch_unsignaled 1
-+    setprop debug.sf.auto_latch_unsignaled 0
-+    setprop debug.sf.disable_backpressure 1
-+
-+on property:persist.sys.blaze.sf_gl_compat=0
-+    setprop debug.sf.latch_unsignaled 0
-+    setprop debug.sf.auto_latch_unsignaled 1
-+    setprop debug.sf.disable_backpressure 0
-+
++on property:init.svc.wpa_supplicant=running
++    write /proc/sys/net/ipv6/conf/all/accept_ra_rdnss 0
++    write /proc/sys/net/ipv6/conf/default/accept_ra_rdnss 0
++    write /proc/sys/net/ipv6/conf/wlan0/accept_ra_rdnss 0
+ 
+ on boot
++    # Prevent broken router IPv6 RDNSS blackholes on early Wi-Fi bring-up
++    write /proc/sys/net/ipv6/conf/all/accept_ra_rdnss 0
++    write /proc/sys/net/ipv6/conf/default/accept_ra_rdnss 0
+     # Universal VoLTE / VoWiFi / VT IMS provisioning overrides for Qualcomm, MediaTek, Exynos & Tensor
+     setprop persist.dbg.volte_avail_ovr 1
+     setprop persist.dbg.vt_avail_ovr 1
+@@ -65,3 +102,36 @@ on property:persist.sys.blaze.sf_gl_compat=0
+     setprop debug.sf.auto_latch_unsignaled 1
+     setprop debug.sf.disable_backpressure 0
+ 
 +# Universal Samsung & Exynos Treble / GSI hardware compatibility (S21/S22/S23/S24 Exynos & OneUI vendor)
 +on property:ro.product.vendor.manufacturer=samsung
 +    setprop debug.sf.latch_unsignaled 1
@@ -297,34 +227,6 @@ index 69c8e467be..777685563b 100644
 +    setprop persist.vendor.radio.sib16_support 1
 +    setprop persist.vendor.radio.custom_ecc 1
 +    setprop persist.vendor.radio.rat_on combine
-+    setprop vendor.camera.aux.packagelist "org.lineageos.aperture,com.android.camera,com.android.camera2,org.codeaurora.snapcam,com.google.android.GoogleCamera"
-+    setprop persist.vendor.camera.privapp.list "org.lineageos.aperture,com.android.camera,com.android.camera2,org.codeaurora.snapcam,com.google.android.GoogleCamera"
++    setprop vendor.camera.aux.packagelist "org.lineageos.aperture,com.android.camera,com.android.camera2,org.codeaurora.snapcam"
++    setprop persist.vendor.camera.privapp.list "org.lineageos.aperture,com.android.camera,com.android.camera2,org.codeaurora.snapcam"
 +
-diff --git a/target/product/gsi_release.mk b/target/product/gsi_release.mk
-index f92a6e3243..958e02df99 100644
---- a/target/product/gsi_release.mk
-+++ b/target/product/gsi_release.mk
-@@ -73,7 +73,8 @@ PRODUCT_PACKAGES += \
- ifneq ($(PRODUCT_IS_AUTOMOTIVE),true)
-     PRODUCT_PACKAGES += \
-         gsi_overlay_framework \
--        gsi_overlay_systemui \
-+        gsi_overlay_systemui
-+
-     PRODUCT_COPY_FILES += \
-         device/generic/common/overlays/overlay-config.xml:$(TARGET_COPY_OUT_SYSTEM_EXT)/overlay/config/config.xml
- endif
-diff --git a/tools/filelistdiff/file_list_diff.py b/tools/filelistdiff/file_list_diff.py
-index 51d2e4479b..b9fff62a21 100644
---- a/tools/filelistdiff/file_list_diff.py
-+++ b/tools/filelistdiff/file_list_diff.py
-@@ -70,7 +70,8 @@ def find_unique_items(kati_installed_files, soong_installed_files, system_module
- 
-     if unique_in_kati or unique_in_soong or unnecessary_allowlists:
-         print('')
--        sys.exit(1)
-+        # Custom ROMs (BlazeAOSP/Lineage) intentionally replace/add packages in GSI; do not abort build.
-+        sys.exit(0)
- 
- 
- if __name__ == '__main__':

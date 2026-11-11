@@ -1,0 +1,59 @@
+prebuilt_etc_xml {
+    name: "sensitive_pn.xml",
+    product_specific: true,
+    src: "etc/sensitive_pn.xml",
+    schema: ":spn-schema",
+}
+
+prebuilt_etc_xml {
+    name: "lineage-component-overrides.xml",
+    product_specific: true,
+    src: "etc/lineage-component-overrides.xml",
+    sub_dir: "sysconfig",
+}
+
+prebuilt_addon_d {
+    name: "50-lineage.sh",
+    src: "bin/50-lineage.sh",
+}
+
+prebuilt_media {
+    name: "Wallpapera.jpg",
+    src: "media/wallpapers/Wallpapera.jpg",
+    relative_install_path: "wallpapers",
+    product_specific: true,
+}
+
+prebuilt_media {
+    name: "Wallpaperb.jpg",
+    src: "media/wallpapers/Wallpaperb.jpg",
+    relative_install_path: "wallpapers",
+    product_specific: true,
+}
+
+prebuilt_media {
+    name: "Wallpaperl.jpg",
+    src: "media/wallpapers/Wallpaperl.jpg",
+    relative_install_path: "wallpapers",
+    product_specific: true,
+}
+
+prebuilt_apex {
+    name: "com.android.vndk.v30",
+    src: "vndk30/com.android.vndk.v30.apex",
+    filename: "com.android.vndk.v30.apex",
+    system_ext_specific: true,
+}
+
+prebuilt_etc {
+    name: "compatibility_matrix.5.xml",
+    src: "vndk30/compatibility_matrix.5.xml",
+    sub_dir: "vintf",
+}
+
+prebuilt_etc {
+    name: "compatibility_matrix.6.xml",
+    src: "vndk30/compatibility_matrix.6.xml",
+    sub_dir: "vintf",
+}
+

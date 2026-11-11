@@ -1,608 +1,173 @@
-From b5d2e3491e675b214766e294fc12b3449e09abe3 Mon Sep 17 00:00:00 2001
-From: DarkMorpheus-pc <ergunbulutarslan@gmail.com>
-Date: Mon, 9 Nov 2026 17:48:39 +0300
-Subject: [PATCH 1/2] Aperture: Enable auxiliary cameras, 30x Space Zoom,
- 4K/60FPS capability synthesis, hardware OIS/EIS stabilization, and fix zoom
- aspect-ratio shift
-
-Change-Id: Ic6889c723927a9c34de5dee63a5547e6772ad1e9
----
- .../org/lineageos/aperture/CameraActivity.kt  |  38 +++-
- .../org/lineageos/aperture/models/Camera.kt   |   8 +
- .../aperture/repositories/CameraRepository.kt |  19 +-
- .../aperture/ui/views/LensSelectorLayout.kt   |  43 ++++-
- .../aperture/viewmodels/CameraViewModel.kt    | 166 ++++++++++++++----
- app/src/main/res/layout/activity_camera.xml   |   3 +
- app/src/main/res/values/config.xml            |   2 +-
- 7 files changed, 236 insertions(+), 43 deletions(-)
-
 diff --git a/app/src/main/java/org/lineageos/aperture/CameraActivity.kt b/app/src/main/java/org/lineageos/aperture/CameraActivity.kt
-index afcf7d8..6d1d2f9 100644
+index 6d1d2f9..642867e 100644
 --- a/app/src/main/java/org/lineageos/aperture/CameraActivity.kt
 +++ b/app/src/main/java/org/lineageos/aperture/CameraActivity.kt
-@@ -252,7 +252,7 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
-                 }
+@@ -835,9 +835,10 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+                         }
  
-                 is ZoomGestureDetector.ZoomEvent.Move -> {
--                    viewModel.cameraController.onPinchToZoom(it.incrementalScaleFactor)
-+                    viewModel.onPinchToZoom(it.incrementalScaleFactor)
-                     handler.removeMessages(MSG_ON_PINCH_TO_ZOOM)
-                     handler.sendMessageDelayed(handler.obtainMessage(MSG_ON_PINCH_TO_ZOOM), 500)
-                 }
-@@ -513,10 +513,10 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
-         }
+                         CameraXCameraState.ERROR_STREAM_CONFIG -> {
+-                            // CameraX use case misconfiguration, no way to recover
+                             showToast(R.string.error_stream_config)
+-                            finish()
++                            if (!tryFallbackToMainCamera()) {
++                                finish()
++                            }
+                         }
  
-         zoomLevel.onProgressChangedByUser = {
--            viewModel.cameraController.setLinearZoom(it)
-+            viewModel.setEffectiveLinearZoom(it)
-         }
-         zoomLevel.textFormatter = {
--            "%.1fx".format(viewModel.zoomState.value?.zoomRatio)
-+            "%.1fx".format(viewModel.getEffectiveZoomRatio())
-         }
+                         CameraXCameraState.ERROR_CAMERA_DISABLED -> {
+@@ -847,9 +848,10 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+                         }
  
-         // Set expose level callback & text formatter
-@@ -1122,14 +1122,40 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+                         CameraXCameraState.ERROR_CAMERA_FATAL_ERROR -> {
+-                            // No way to fix it without user action, bail out
+                             showToast(R.string.error_camera_fatal_error)
+-                            finish()
++                            if (!tryFallbackToMainCamera()) {
++                                finish()
++                            }
+                         }
  
-         launch {
-             viewModel.zoomState.collectLatest { zoomState ->
--                zoomState?.takeIf { it.minZoomRatio != it.maxZoomRatio }?.let {
--                    zoomLevel.progress = it.linearZoom
-+                zoomState?.takeIf {
-+                    it.minZoomRatio != viewModel.getMaxEffectiveZoomRatio()
-+                }?.let {
-+                    zoomLevel.progress = viewModel.getEffectiveLinearZoom()
-                     zoomLevel.isVisible = true
+                         CameraXCameraState.ERROR_DO_NOT_DISTURB_MODE_ENABLED -> {
+@@ -868,7 +870,9 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
  
-                     handler.removeMessages(MSG_HIDE_ZOOM_SLIDER)
-                     handler.sendMessageDelayed(handler.obtainMessage(MSG_HIDE_ZOOM_SLIDER), 2000)
+                                 CameraXCameraState.ErrorType.CRITICAL -> {
+                                     showToast(R.string.error_unknown_critical)
+-                                    finish()
++                                    if (!tryFallbackToMainCamera()) {
++                                        finish()
++                                    }
+                                 }
  
--                    lensSelectorLayout.onZoomRatioChanged(it.zoomRatio)
-+                    lensSelectorLayout.onZoomRatioChanged(viewModel.getEffectiveZoomRatio())
-+                }
-+            }
-+        }
-+
-+        launch {
-+            viewModel.spaceZoomExtraMultiplier.collectLatest { extraZoom ->
-+                for (i in 0 until viewFinder.childCount) {
-+                    val child = viewFinder.getChildAt(i)
-+                    child.scaleX = extraZoom
-+                    child.scaleY = extraZoom
-+                }
-+                viewModel.zoomState.value?.takeIf {
-+                    it.minZoomRatio != viewModel.getMaxEffectiveZoomRatio()
-+                }?.let {
-+                    zoomLevel.progress = viewModel.getEffectiveLinearZoom()
-+                    if (extraZoom > 1.001f) {
-+                        zoomLevel.isVisible = true
-+                        handler.removeMessages(MSG_HIDE_ZOOM_SLIDER)
-+                        handler.sendMessageDelayed(
-+                            handler.obtainMessage(MSG_HIDE_ZOOM_SLIDER),
-+                            2000
-+                        )
+                                 null -> {
+@@ -1754,6 +1758,19 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+                 viewModel.cameraController.videoCaptureQualitySelector =
+                     QualitySelector.from(cameraConfiguration.videoQuality)
+ 
++                // Set target frame rate on StreamSpec only when natively advertised in AE ranges;
++                // otherwise leave StreamSpec unspecified so CameraX never rejects 4K@60fps while
++                // Camera2CameraControl enforces CONTROL_AE_TARGET_FPS_RANGE = [60, 60].
++                val requestedFps = cameraConfiguration.videoFrameRate
++                viewModel.cameraController.videoCaptureTargetFrameRate =
++                    if (requestedFps != null &&
++                        cameraConfiguration.camera.supportsNativeFrameRate(requestedFps)
++                    ) {
++                        android.util.Range(requestedFps.value, requestedFps.value)
++                    } else {
++                        android.util.Range(0, 0)
 +                    }
-+                    lensSelectorLayout.onZoomRatioChanged(viewModel.getEffectiveZoomRatio())
-                 }
-             }
++
+                 // Set the dynamic range
+                 viewModel.cameraController.videoCaptureDynamicRange =
+                     cameraConfiguration.videoDynamicRange.dynamicRange
+@@ -2264,6 +2281,8 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
          }
+     }
+ 
++    private fun tryFallbackToMainCamera(): Boolean = viewModel.fallbackToMainCameraIfAux()
++
+     companion object {
+         private val LOG_TAG = CameraActivity::class.simpleName!!
+ 
 diff --git a/app/src/main/java/org/lineageos/aperture/models/Camera.kt b/app/src/main/java/org/lineageos/aperture/models/Camera.kt
-index 41d6399..fbcc845 100644
+index fbcc845..52f5cd4 100644
 --- a/app/src/main/java/org/lineageos/aperture/models/Camera.kt
 +++ b/app/src/main/java/org/lineageos/aperture/models/Camera.kt
-@@ -72,6 +72,12 @@ class Camera private constructor(
+@@ -90,10 +90,41 @@ class Camera private constructor(
+         }
+     }
  
-     val intrinsicZoomRatio = cameraInfo.intrinsicZoomRatio
- 
-+    /**
-+     * Whether this camera is a back-facing telephoto lens that supports 30x Space Zoom.
-+     */
-+    val supportsSpaceZoom: Boolean =
-+        cameraFacing == CameraFacing.BACK && intrinsicZoomRatio >= 1.5f
+-    private val supportedVideoFrameRates = cameraInfo.supportedFrameRateRanges.mapNotNull {
++    private val nativeFrameRateRanges = cameraInfo.supportedFrameRateRanges
 +
-     private val imageCaptureCapabilities = ImageCapture.getImageCaptureCapabilities(cameraInfo)
- 
-     val supportedPhotoOutputFormats = imageCaptureCapabilities.supportedOutputFormats.map {
-@@ -327,6 +333,8 @@ class Camera private constructor(
++    fun supportsNativeFrameRate(frameRate: FrameRate): Boolean =
++        nativeFrameRateRanges.any { it.lower == frameRate.value && it.upper == frameRate.value }
++
++    private val supportedVideoFrameRates = nativeFrameRateRanges.mapNotNull {
+         FrameRate.fromRange(it.toClosedRange())
      }.toSet()
  
-     companion object {
-+        const val MAX_SPACE_ZOOM_RATIO = 30.0f
++    private val streamConfigurationMap = runCatching {
++        camera2CameraInfo.getCameraCharacteristic(
++            CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP
++        )
++    }.getOrNull()
 +
-         fun fromCameraX(
-             cameraXCameraInfo: CameraInfo,
-             extensionsManager: ExtensionsManager,
++    private fun supports60FpsForQuality(quality: Quality): Boolean {
++        if (nativeFrameRateRanges.any { it.upper >= 60 }) return true
++        val map = streamConfigurationMap ?: return false
++        val targetSize = when (quality) {
++            Quality.SD -> android.util.Size(720, 480)
++            Quality.HD -> android.util.Size(1280, 720)
++            Quality.FHD -> android.util.Size(1920, 1080)
++            Quality.UHD -> android.util.Size(3840, 2160)
++            else -> return false
++        }
++        val privMinNs = runCatching {
++            map.getOutputMinFrameDuration(android.graphics.ImageFormat.PRIVATE, targetSize)
++        }.getOrDefault(0L)
++        if (privMinNs in 1L..20_000_000L) return true
++        val recMinNs = runCatching {
++            map.getOutputMinFrameDuration(android.media.MediaRecorder::class.java, targetSize)
++        }.getOrDefault(0L)
++        return recMinNs in 1L..20_000_000L
++    }
++
+     private val videoCapabilities = Recorder.getVideoCapabilities(cameraInfo)
+ 
+     private val supportedVideoDynamicRanges = videoCapabilities.supportedDynamicRanges.map {
+@@ -109,6 +140,9 @@ class Camera private constructor(
+             VideoQualityInfo(
+                 it,
+                 supportedVideoFrameRates.toMutableSet().apply {
++                    if (supports60FpsForQuality(it)) {
++                        add(FrameRate.FPS_60)
++                    }
+                     additionalVideoFrameRates[it].orEmpty().forEach { (frameRate, remove) ->
+                         if (remove) {
+                             remove(frameRate)
 diff --git a/app/src/main/java/org/lineageos/aperture/repositories/CameraRepository.kt b/app/src/main/java/org/lineageos/aperture/repositories/CameraRepository.kt
-index e47ac48..e4f08eb 100644
+index e4f08eb..e9e2f0f 100644
 --- a/app/src/main/java/org/lineageos/aperture/repositories/CameraRepository.kt
 +++ b/app/src/main/java/org/lineageos/aperture/repositories/CameraRepository.kt
-@@ -7,6 +7,8 @@ package org.lineageos.aperture.repositories
- 
- import android.Manifest
- import android.content.Context
-+import android.hardware.camera2.CameraCharacteristics
-+import android.hardware.camera2.CameraMetadata
- import androidx.camera.camera2.interop.Camera2CameraInfo
- import androidx.camera.camera2.interop.ExperimentalCamera2Interop
- import androidx.camera.core.CameraInfo
-@@ -122,17 +124,30 @@ class CameraRepository(
-                 val isIgnoredAuxCamera = overlaysRepository.ignoredAuxCameraIds.contains(
-                     camera2CameraInfo.cameraId
-                 )
-+                val capabilities = camera2CameraInfo.getCameraCharacteristic(
-+                    CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES
-+                ) ?: IntArray(0)
-+                val isLogicalCamera = physicalCameraInfos.size > 1 ||
-+                        capabilities.contains(
-+                            CameraMetadata.REQUEST_AVAILABLE_CAPABILITIES_LOGICAL_MULTI_CAMERA
-+                        )
-                 val isIgnoredLogicalCamera = overlaysRepository.ignoreLogicalAuxCameras
--                        && physicalCameraInfos.size > 1
-+                        && isLogicalCamera
-+                val isDuplicateMainZoomAux = intrinsicZoomRatio in 0.85f..1.35f
+@@ -127,6 +127,9 @@ class CameraRepository(
+                 val capabilities = camera2CameraInfo.getCameraCharacteristic(
+                     CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES
+                 ) ?: IntArray(0)
++                val isBackwardCompatible = capabilities.contains(
++                    CameraMetadata.REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE
++                )
+                 val isLogicalCamera = physicalCameraInfos.size > 1 ||
+                         capabilities.contains(
+                             CameraMetadata.REQUEST_AVAILABLE_CAPABILITIES_LOGICAL_MULTI_CAMERA
+@@ -136,6 +139,7 @@ class CameraRepository(
+                 val isDuplicateMainZoomAux = intrinsicZoomRatio in 0.85f..1.35f
  
                  overlaysRepository.enableAuxCameras
++                        && isBackwardCompatible
                          && !isIgnoredAuxCamera
                          && !isIgnoredLogicalCamera
-+                        && !isDuplicateMainZoomAux
-             }
-         }
-     }
- 
--    private fun List<CameraInfo>.mapToCamera() = map { it.toCamera() }.sortedBy { it.cameraId }
-+    private fun List<CameraInfo>.mapToCamera() = map { it.toCamera() }
-+        .sortedWith(compareBy({ it.cameraId.toIntOrNull() ?: Int.MAX_VALUE }, { it.cameraId }))
-+        .distinctBy {
-+            it.cameraFacing to kotlin.math.round(it.intrinsicZoomRatio * 10f).toInt()
-+        }
- 
-     private fun CameraInfo.toCamera() = Camera.fromCameraX(
-         this,
-diff --git a/app/src/main/java/org/lineageos/aperture/ui/views/LensSelectorLayout.kt b/app/src/main/java/org/lineageos/aperture/ui/views/LensSelectorLayout.kt
-index c15c0b3..f87dc2d 100644
---- a/app/src/main/java/org/lineageos/aperture/ui/views/LensSelectorLayout.kt
-+++ b/app/src/main/java/org/lineageos/aperture/ui/views/LensSelectorLayout.kt
-@@ -75,7 +75,7 @@ class LensSelectorLayout @JvmOverloads constructor(
-             for (camera in availableCameras.sortedBy { it.intrinsicZoomRatio }) {
-                 val button = inflateButton().apply {
-                     setOnClickListener {
--                        if (!isSelected) {
-+                        if (camera != activeCamera) {
-                             buttonToCamera[it]?.let(onCameraChangeCallback)
-                         } else {
-                             onResetZoomRatioCallback()
-@@ -88,6 +88,25 @@ class LensSelectorLayout @JvmOverloads constructor(
-                 buttonToCamera[button] = camera
-                 buttonToApproximateZoomRatio[button] = camera.intrinsicZoomRatio
-             }
-+
-+            if (activeCamera.supportsSpaceZoom) {
-+                for (spaceZoomPreset in SPACE_ZOOM_PRESETS) {
-+                    val button = inflateButton().apply {
-+                        setOnClickListener {
-+                            if (!isSelected) {
-+                                buttonToZoomRatio[it]?.let(onZoomRatioChangeCallback)
-+                            } else {
-+                                onResetZoomRatioCallback()
-+                            }
-+                        }
-+                        text = formatZoomRatio(spaceZoomPreset)
-+                    }
-+
-+                    addView(button)
-+                    buttonToZoomRatio[button] = spaceZoomPreset
-+                    buttonToApproximateZoomRatio[button] = spaceZoomPreset
-+                }
-+            }
-         }
- 
-         updateButtonsAttributes()
-@@ -124,6 +143,9 @@ class LensSelectorLayout @JvmOverloads constructor(
-     }
- 
-     private fun updateButtonsAttributes() {
-+        if (!::activeCamera.isInitialized) {
-+            return
-+        }
-         if (usesLogicalZoomRatio) {
-             buttonToZoomRatio.asSequence().let {
-                 val firstButton = it.first().key
-@@ -146,8 +168,23 @@ class LensSelectorLayout @JvmOverloads constructor(
-                 }
-             }
-         } else {
-+            var activeSpaceZoomButton: Button? = null
-+            if (activeCamera.supportsSpaceZoom && buttonToZoomRatio.isNotEmpty()) {
-+                for ((button, exactZoomRatio) in buttonToZoomRatio) {
-+                    if (currentZoomRatio >= exactZoomRatio - 0.2f) {
-+                        activeSpaceZoomButton = button
-+                    }
-+                }
-+            }
-+
-             for ((button, camera) in buttonToCamera) {
--                updateButtonAttributes(button, camera == activeCamera)
-+                updateButtonAttributes(
-+                    button,
-+                    camera == activeCamera && activeSpaceZoomButton == null
-+                )
-+            }
-+            for ((button, _) in buttonToZoomRatio) {
-+                updateButtonAttributes(button, button == activeSpaceZoomButton)
-             }
-         }
-     }
-@@ -176,5 +213,7 @@ class LensSelectorLayout @JvmOverloads constructor(
- 
-         private val ZOOM_RATIO_FORMATTER = DecimalFormat("0.#", DECIMAL_FORMAT_SYMBOLS)
-         private val ZOOM_RATIO_FORMATTER_SUB_ONE = DecimalFormat(".#", DECIMAL_FORMAT_SYMBOLS)
-+
-+        private val SPACE_ZOOM_PRESETS = listOf(4f, 10f, 30f)
-     }
- }
+                         && !isDuplicateMainZoomAux
 diff --git a/app/src/main/java/org/lineageos/aperture/viewmodels/CameraViewModel.kt b/app/src/main/java/org/lineageos/aperture/viewmodels/CameraViewModel.kt
-index 3de66c6..01a3908 100644
+index 01a3908..3fc595d 100644
 --- a/app/src/main/java/org/lineageos/aperture/viewmodels/CameraViewModel.kt
 +++ b/app/src/main/java/org/lineageos/aperture/viewmodels/CameraViewModel.kt
-@@ -503,6 +503,12 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
-             initialValue = null
-         )
- 
-+    /**
-+     * Additional software/hybrid zoom multiplier beyond the HAL's maxZoomRatio
-+     * when Telephoto 30x Space Zoom is active.
-+     */
-+    val spaceZoomExtraMultiplier = MutableStateFlow(1.0f)
-+
-     val tapToFocusInfoState = cameraController.tapToFocusInfoState.asFlow()
-         .flowOn(Dispatchers.IO)
-         .shareIn(
-@@ -1226,15 +1232,16 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
-                 )
- 
-                 val targetMaxEdge = photoResolutionPreset.value.maxLongEdge
-+                val extraZoom = spaceZoomExtraMultiplier.value
-                 if (
--                    targetMaxEdge > 0 &&
-+                    (targetMaxEdge > 0 || extraZoom > 1.01f) &&
-                     (imageOutputFormat == ImageCapture.OUTPUT_FORMAT_JPEG ||
-                         imageOutputFormat == ImageCapture.OUTPUT_FORMAT_JPEG_ULTRA_HDR ||
-                         (imageOutputFormat == ImageCapture.OUTPUT_FORMAT_RAW_JPEG &&
-                             output.imageFormat !in RAW_FORMATS))
-                 ) {
-                     output.savedUri?.let { savedUri ->
--                        downscaleSavedJpegUriIfNeeded(savedUri, targetMaxEdge)
-+                        downscaleSavedJpegUriIfNeeded(savedUri, targetMaxEdge, extraZoom)
-                     }
-                 }
- 
-@@ -1831,6 +1838,74 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
-         this.exposureCompensationLevel.value = exposureCompensationLevel
-     }
- 
-+    fun getMaxEffectiveZoomRatio(): Float {
-+        val hwMax = zoomState.value?.maxZoomRatio ?: 1f
-+        return if (_cameraConfiguration.value?.camera?.supportsSpaceZoom == true) {
-+            maxOf(hwMax, Camera.MAX_SPACE_ZOOM_RATIO)
-+        } else {
-+            hwMax
-+        }
-+    }
-+
-+    fun getEffectiveZoomRatio(): Float {
-+        val hwZoom = zoomState.value?.zoomRatio ?: 1f
-+        return hwZoom * spaceZoomExtraMultiplier.value
-+    }
-+
-+    fun getEffectiveLinearZoom(): Float {
-+        val zs = zoomState.value ?: return 0f
-+        if (_cameraConfiguration.value?.camera?.supportsSpaceZoom != true) {
-+            return zs.linearZoom
-+        }
-+        val minZ = zs.minZoomRatio
-+        val maxZ = maxOf(zs.maxZoomRatio, Camera.MAX_SPACE_ZOOM_RATIO)
-+        if (maxZ <= minZ) return 0f
-+        return ((getEffectiveZoomRatio() - minZ) / (maxZ - minZ)).coerceIn(0f, 1f)
-+    }
-+
-+    fun setEffectiveZoomRatio(targetZoomRatio: Float) {
-+        val zs = zoomState.value ?: return
-+        val minZ = zs.minZoomRatio
-+        val hwMax = zs.maxZoomRatio
-+        val maxZ = getMaxEffectiveZoomRatio()
-+        val clamped = targetZoomRatio.coerceIn(minZ, maxZ)
-+        if (clamped <= hwMax || _cameraConfiguration.value?.camera?.supportsSpaceZoom != true) {
-+            spaceZoomExtraMultiplier.value = 1.0f
-+            cameraController.setZoomRatio(clamped.coerceIn(minZ, hwMax))
-+        } else {
-+            cameraController.setZoomRatio(hwMax)
-+            spaceZoomExtraMultiplier.value = (clamped / hwMax).coerceIn(1.0f, maxZ / hwMax)
-+        }
-+    }
-+
-+    fun setEffectiveLinearZoom(linearZoom: Float) {
-+        val zs = zoomState.value ?: return
-+        val clampedLinear = linearZoom.coerceIn(0f, 1f)
-+        if (_cameraConfiguration.value?.camera?.supportsSpaceZoom != true) {
-+            spaceZoomExtraMultiplier.value = 1.0f
-+            cameraController.setLinearZoom(clampedLinear)
-+            return
-+        }
-+        val minZ = zs.minZoomRatio
-+        val maxZ = maxOf(zs.maxZoomRatio, Camera.MAX_SPACE_ZOOM_RATIO)
-+        val targetZoom = minZ + clampedLinear * (maxZ - minZ)
-+        setEffectiveZoomRatio(targetZoom)
-+    }
-+
-+    fun onPinchToZoom(scaleFactor: Float) {
-+        if (_cameraConfiguration.value?.camera?.supportsSpaceZoom != true) {
-+            spaceZoomExtraMultiplier.value = 1.0f
-+            cameraController.onPinchToZoom(scaleFactor)
-+            return
-+        }
-+        val speedUp = if (scaleFactor > 1f) {
-+            1.0f + (scaleFactor - 1.0f) * 2.0f
-+        } else {
-+            1.0f - (1.0f - scaleFactor) * 2.0f
-+        }
-+        setEffectiveZoomRatio(getEffectiveZoomRatio() * speedUp)
-+    }
-+
-     /**
-      * Apply the specified zoom smoothly. The value will be automatically clamped
-      * between min and max.
-@@ -1842,14 +1917,17 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
-             return
-         }
- 
--        val zoomState = zoomState.value ?: return
-+        val zoomState = zoomState.value ?: run {
-+            zoomGestureMutex.unlock()
-+            return
-+        }
- 
-         ValueAnimator.ofFloat(
--            zoomState.zoomRatio,
--            zoomRatio.coerceIn(zoomState.minZoomRatio, zoomState.maxZoomRatio)
-+            getEffectiveZoomRatio(),
-+            zoomRatio.coerceIn(zoomState.minZoomRatio, getMaxEffectiveZoomRatio())
-         ).apply {
-             addUpdateListener {
--                cameraController.setZoomRatio(it.animatedValue as Float)
-+                setEffectiveZoomRatio(it.animatedValue as Float)
-             }
-             addListener(
-                 onEnd = {
-@@ -1867,16 +1945,12 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
-     /**
-      * Zoom in by a power of 2.
-      */
--    fun zoomIn() = zoomState.value?.zoomRatio?.let {
--        smoothZoom(it.nextPowerOfTwo())
--    }
-+    fun zoomIn() = smoothZoom(getEffectiveZoomRatio().nextPowerOfTwo())
- 
-     /**
-      * Zoom out by a power of 2.
-      */
--    fun zoomOut() = zoomState.value?.zoomRatio?.let {
--        smoothZoom(it.previousPowerOfTwo())
--    }
-+    fun zoomOut() = smoothZoom(getEffectiveZoomRatio().previousPowerOfTwo())
- 
-     fun setSaveLocation(saveLocation: Boolean?) {
-         preferencesRepository.saveLocation.value = saveLocation
-@@ -1939,7 +2013,9 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
-     private fun createInitialCameraConfiguration(
-         camera: Camera,
-         cameraMode: CameraMode,
--    ) = when (cameraMode) {
-+    ): CameraConfiguration {
-+        spaceZoomExtraMultiplier.value = 1.0f
-+        return when (cameraMode) {
-         CameraMode.PHOTO,
-         CameraMode.NIGHT,
-         CameraMode.PRO_PHOTO -> {
-@@ -2043,14 +2119,14 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
-             val savedPreset = preferencesRepository.videoResolutionPreset.value
-             val videoResolutionPreset = savedPreset.takeIf {
-                 camera.supportedVideoResolutionPresets.contains(it)
--            } ?: camera.supportedVideoResolutionPresets.firstOrNull {
-+            } ?: camera.supportedVideoResolutionPresets.lastOrNull {
-                 it.underlyingQuality == preferencesRepository.videoQuality.value
--            } ?: camera.supportedVideoResolutionPresets.firstOrNull()
-+            } ?: camera.supportedVideoResolutionPresets.lastOrNull()
-                 ?: VideoResolutionPreset.FHD_1080P
- 
-             val videoQuality = videoResolutionPreset.underlyingQuality.takeIf {
-                 camera.supportedVideoQualities.contains(it)
--            } ?: camera.supportedVideoQualities.keys.firstOrNull() ?: error(
-+            } ?: camera.supportedVideoQualities.keys.lastOrNull() ?: error(
-                 "Camera ${camera.cameraId} does not support any video quality"
-             )
- 
-@@ -2108,8 +2184,13 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
-             camera = camera,
+@@ -1166,6 +1166,19 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
          )
      }
-+    }
  
--    private fun downscaleSavedJpegUriIfNeeded(uri: Uri, maxLongEdge: Int) {
-+    private fun downscaleSavedJpegUriIfNeeded(
-+        uri: Uri,
-+        maxLongEdge: Int,
-+        spaceZoomExtra: Float = 1.0f,
-+    ) {
-         runCatching {
-             val cr = applicationContext.contentResolver
-             val exifTags = mutableMapOf<String, String>()
-@@ -2136,30 +2217,51 @@ class CameraViewModel(application: Application) : ApertureViewModel(application)
-                     exif.getAttribute(tag)?.let { exifTags[tag] = it }
-                 }
-             }
--            val original = cr.openInputStream(uri)?.use { input ->
-+            var workingBitmap = cr.openInputStream(uri)?.use { input ->
-                 BitmapFactory.decodeStream(input)
-             } ?: return@runCatching
- 
--            val width = original.width
--            val height = original.height
--            val longEdge = maxOf(width, height)
--            if (longEdge <= maxLongEdge) {
--                original.recycle()
--                return@runCatching
-+            val origWidth = workingBitmap.width
-+            val origHeight = workingBitmap.height
-+
-+            if (spaceZoomExtra > 1.01f) {
-+                val cropW = (origWidth / spaceZoomExtra).toInt().coerceIn(1, origWidth)
-+                val cropH = (origHeight / spaceZoomExtra).toInt().coerceIn(1, origHeight)
-+                val cropX = ((origWidth - cropW) / 2).coerceAtLeast(0)
-+                val cropY = ((origHeight - cropH) / 2).coerceAtLeast(0)
-+                val cropped = Bitmap.createBitmap(workingBitmap, cropX, cropY, cropW, cropH)
-+                if (cropped !== workingBitmap) {
-+                    workingBitmap.recycle()
-+                }
-+                val upscaled = Bitmap.createScaledBitmap(cropped, origWidth, origHeight, true)
-+                if (upscaled !== cropped) {
-+                    cropped.recycle()
-+                }
-+                workingBitmap = upscaled
-             }
- 
--            val scale = maxLongEdge.toFloat() / longEdge.toFloat()
--            val targetWidth = (width * scale).toInt().coerceAtLeast(1)
--            val targetHeight = (height * scale).toInt().coerceAtLeast(1)
--            val scaled = Bitmap.createScaledBitmap(original, targetWidth, targetHeight, true)
--            if (scaled !== original) {
--                original.recycle()
-+            val width = workingBitmap.width
-+            val height = workingBitmap.height
-+            val longEdge = maxOf(width, height)
-+            val finalBitmap = if (maxLongEdge > 0 && longEdge > maxLongEdge) {
-+                val scale = maxLongEdge.toFloat() / longEdge.toFloat()
-+                val targetWidth = (width * scale).toInt().coerceAtLeast(1)
-+                val targetHeight = (height * scale).toInt().coerceAtLeast(1)
-+                val scaled = Bitmap.createScaledBitmap(
-+                    workingBitmap, targetWidth, targetHeight, true
-+                )
-+                if (scaled !== workingBitmap) {
-+                    workingBitmap.recycle()
-+                }
-+                scaled
-+            } else {
-+                workingBitmap
-             }
- 
-             cr.openOutputStream(uri, "wt")?.use { out ->
--                scaled.compress(Bitmap.CompressFormat.JPEG, 95, out)
-+                finalBitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
-             }
--            scaled.recycle()
-+            finalBitmap.recycle()
- 
-             cr.openFileDescriptor(uri, "rw")?.use { pfd ->
-                 val exifOut = ExifInterface(pfd.fileDescriptor)
-diff --git a/app/src/main/res/layout/activity_camera.xml b/app/src/main/res/layout/activity_camera.xml
-index 72e0d50..25d54c8 100644
---- a/app/src/main/res/layout/activity_camera.xml
-+++ b/app/src/main/res/layout/activity_camera.xml
-@@ -17,7 +17,10 @@
-         android:id="@+id/viewFinder"
-         android:layout_width="0dp"
-         android:layout_height="0dp"
-+        android:clipChildren="true"
-+        android:clipToPadding="true"
-         android:soundEffectsEnabled="false"
-+        app:implementationMode="compatible"
-         app:layout_constraintBottom_toTopOf="@+id/secondaryBottomBarLayout"
-         app:layout_constraintEnd_toEndOf="parent"
-         app:layout_constraintStart_toStartOf="parent"
-diff --git a/app/src/main/res/values/config.xml b/app/src/main/res/values/config.xml
-index 1920aa1..46fb7a9 100644
---- a/app/src/main/res/values/config.xml
-+++ b/app/src/main/res/values/config.xml
-@@ -5,7 +5,7 @@
- -->
- <resources>
-     <!-- Enable auxiliary cameras selector. -->
--    <bool name="config_enableAuxCameras">false</bool>
-+    <bool name="config_enableAuxCameras">true</bool>
- 
-     <!-- List of ID of auxiliary cameras that must be ignored by the app. -->
-     <string-array name="config_ignoredAuxCameraIds">
--- 
-2.56.0
-
-
-From 7a8034104fa1d719999e9b7591799453361e347d Mon Sep 17 00:00:00 2001
-From: DarkMorpheus-pc <ergunbulutarslan@gmail.com>
-Date: Tue, 10 Nov 2026 00:03:08 +0300
-Subject: [PATCH 2/2] Aperture: Inject universal Samsung cameraClientIndex and
- Qualcomm CamX EISv3/MFNR vendor tags
-
-Change-Id: Ic3f05d4c2798ae51f5f401c4d3f451d90c9f278d
----
- .../ext/CaptureRequestOptionsBuilder.kt       | 34 +++++++++++++++++++
- 1 file changed, 34 insertions(+)
-
-diff --git a/app/src/main/java/org/lineageos/aperture/ext/CaptureRequestOptionsBuilder.kt b/app/src/main/java/org/lineageos/aperture/ext/CaptureRequestOptionsBuilder.kt
-index f9f3270..481afd0 100644
---- a/app/src/main/java/org/lineageos/aperture/ext/CaptureRequestOptionsBuilder.kt
-+++ b/app/src/main/java/org/lineageos/aperture/ext/CaptureRequestOptionsBuilder.kt
-@@ -34,11 +34,37 @@ fun CaptureRequestOptions.Builder.setFrameRate(
-     )
- } ?: clearCaptureRequestOption(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE)
- 
-+@OptIn(ExperimentalCamera2Interop::class)
-+private fun <T : Any> CaptureRequestOptions.Builder.trySetVendorKey(
-+    name: String,
-+    type: Class<T>,
-+    value: T,
-+) {
-+    runCatching {
-+        val ctor = CaptureRequest.Key::class.java.getDeclaredConstructor(
-+            String::class.java,
-+            Class::class.java,
-+        )
-+        ctor.isAccessible = true
-+        @Suppress("UNCHECKED_CAST")
-+        val key = ctor.newInstance(name, type) as CaptureRequest.Key<T>
-+        setCaptureRequestOption(key, value)
-+    }
-+}
-+
- @OptIn(ExperimentalCamera2Interop::class)
- fun CaptureRequestOptions.Builder.setVideoStabilizationMode(
-     videoStabilizationMode: VideoStabilizationMode?,
-     camera: Camera? = null,
- ) = apply {
-+    // Universal vendor client & MFNR hints (ignored safely if HAL does not expose them)
-+    trySetVendorKey("samsung.android.control.cameraClientIndex", Int::class.javaObjectType, 1)
-+    trySetVendorKey(
-+        "org.quic.camera.CustomNoiseReduction.CustomNoiseReduction",
-+        Byte::class.javaObjectType,
-+        1.toByte()
-+    )
-+
-     videoStabilizationMode?.let { mode ->
-         val eisMode = when (mode) {
-             VideoStabilizationMode.OFF,
-@@ -66,6 +92,14 @@ fun CaptureRequestOptions.Builder.setVideoStabilizationMode(
-         }
-         setCaptureRequestOption(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, eisMode)
- 
-+        val eisEnabled = if (eisMode != CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_OFF) {
-+            1.toByte()
-+        } else {
-+            0.toByte()
++    fun fallbackToMainCameraIfAux(): Boolean {
++        val currentCamera = _cameraConfiguration.value?.camera ?: return false
++        val mainCamera = when (currentCamera.cameraFacing) {
++            CameraFacing.FRONT -> cameraRepository.mainFrontCamera ?: cameraRepository.mainBackCamera
++            else -> cameraRepository.mainBackCamera ?: cameraRepository.mainFrontCamera
++        } ?: return false
++        if (currentCamera == mainCamera) {
++            return false
 +        }
-+        trySetVendorKey("org.quic.camera.eis3enable.EISV3Enable", Byte::class.javaObjectType, eisEnabled)
-+        trySetVendorKey("org.codeaurora.qcamera3.eis3.enable", Byte::class.javaObjectType, eisEnabled)
++        selectCamera(mainCamera)
++        return true
++    }
 +
-         if (camera?.supportsOis == true) {
-             setCaptureRequestOption(
-                 CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
--- 
-2.56.0
-
+     fun takePhoto() {
+         // Bail out if a photo is already being taken
+         if (cameraState.value == CameraState.TAKING_PHOTO) {
