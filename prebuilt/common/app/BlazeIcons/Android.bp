@@ -1,0 +1,20 @@
+// Copyright (C) 2026 BlazeAOSP Project
+// SPDX-License-Identifier: Apache-2.0
+
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+// Stock BlazeAOSP icon pack (ADW / Nova / Theme Park compatible).
+// Selected by default; BlazeHouse > Themes > Icon pack switches to stock or any
+// other installed icon pack through Settings.Secure "blaze_icon_pack".
+android_app_import {
+    name: "BlazeIcons",
+    owner: "blaze",
+    apk: "BlazeIcons.apk",
+    certificate: "platform",
+    dex_preopt: {
+        enabled: false,
+    },
+    product_specific: true,
+}
