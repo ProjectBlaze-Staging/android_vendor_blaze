@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+TARGET_EXCLUDE_APNS_CONF := true
 $(call inherit-product, device/generic/common/gsi_arm64.mk)
 $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
 include vendor/lineage/build/target/product/lineage_generic_target.mk
