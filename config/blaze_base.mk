@@ -66,7 +66,9 @@ PRODUCT_PRODUCT_PROPERTIES += \
     debug.hwui.use_hint_manager=true \
     renderthread.skia.reduceopstasksplitting=true \
     touch.pressure.scale=0.001 \
-    persist.sys.scrollingcache=3
+    persist.sys.scrollingcache=3 \
+    persist.vendor.camera.privapp.list=com.google.android.GoogleCamera,org.lineageos.aperture \
+    vendor.camera.aux.packagelist=com.google.android.GoogleCamera,org.lineageos.aperture
 
 # Performance & Sysctl Init Script
 PRODUCT_COPY_FILES += \
