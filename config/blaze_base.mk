@@ -47,9 +47,7 @@ PRODUCT_PRODUCT_PROPERTIES += \
     debug.sf.disable_backpressure=0 \
     ro.surface_flinger.supports_background_blur=1 \
     persist.sys.sf.disable_blurs=0 \
-    ro.sf.blurs_are_expensive=0
-
-PRODUCT_SYSTEM_PROPERTIES += \
+    ro.sf.blurs_are_expensive=0 \
     dalvik.vm.usap_pool_enabled=true \
     persist.device_config.runtime_native.usap_pool_enabled=true \
     pm.dexopt.bg-dexopt=speed-profile \
@@ -72,7 +70,7 @@ PRODUCT_SYSTEM_PROPERTIES += \
 
 # Performance & Sysctl Init Script
 PRODUCT_COPY_FILES += \
-    vendor/blaze/prebuilt/common/etc/init/blaze-perf.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/blaze-perf.rc
+    vendor/blaze/prebuilt/common/etc/init/blaze-perf.rc:$(TARGET_COPY_OUT_SYSTEM_EXT)/etc/init/blaze-perf.rc
 
 # Blaze Core Packages & Prebuilts (Vanilla)
 PRODUCT_PACKAGES -= \
@@ -103,7 +101,6 @@ PIXEL_SOUND_FILES := \
     NFCTransferInitiated NFCTransferComplete
 
 PRODUCT_COPY_FILES += $(foreach fn,$(PIXEL_SOUND_FILES),\
-    vendor/blaze/prebuilt/common/media/audio/ui/$(fn).ogg:$(TARGET_COPY_OUT_SYSTEM)/media/audio/ui/$(fn).ogg \
     vendor/blaze/prebuilt/common/media/audio/ui/$(fn).ogg:$(TARGET_COPY_OUT_PRODUCT)/media/audio/ui/$(fn).ogg)
 
 # Versioning & OTA

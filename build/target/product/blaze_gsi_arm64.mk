@@ -18,7 +18,7 @@ PRODUCT_BRAND := BlazeAOSP
 PRODUCT_MODEL := BlazeAOSP GSI (arm64)
 
 # Identify GSI builds explicitly so GSI-only settings (e.g. TrebleSettings) remain hidden on devices
-PRODUCT_SYSTEM_PROPERTIES += \
+PRODUCT_SYSTEM_EXT_PROPERTIES += \
     ro.blaze.is_gsi=true
 
 PRODUCT_PACKAGES += \
