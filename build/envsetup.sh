@@ -27,7 +27,7 @@ function check_product()
     fi
     if (echo -n $1 | grep -q -e "^blaze_") ; then
         BLAZE_BUILD=$(echo -n $1 | sed -e 's/^blaze_//g')
-        LINEAGE_BUILD=
+        LINEAGE_BUILD="$BLAZE_BUILD"
     elif (echo -n $1 | grep -q -e "^lineage_") ; then
         LINEAGE_BUILD=$(echo -n $1 | sed -e 's/^lineage_//g')
         BLAZE_BUILD=
